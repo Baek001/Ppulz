@@ -53,9 +53,9 @@ export default function AuthPage({ mode }) {
     setInfoMessage('');
 
     try {
-      if (!supabaseReady) {
-        throw new Error('Supabase 환경변수가 없습니다.');
-      }
+      // if (!supabaseReady) {
+      //   throw new Error('Supabase 환경변수가 없습니다.');
+      // }
 
       if (!isLogin && password !== confirmPassword) {
         throw new Error('비밀번호와 비밀번호 확인이 일치하지 않습니다.');
@@ -109,9 +109,9 @@ export default function AuthPage({ mode }) {
     setInfoMessage('');
 
     try {
-      if (!supabaseReady) {
-        throw new Error('Supabase 환경변수가 없습니다.');
-      }
+      // if (!supabaseReady) {
+      //   throw new Error('Supabase 환경변수가 없습니다.');
+      // }
 
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
@@ -137,13 +137,7 @@ export default function AuthPage({ mode }) {
           <h1 className={styles.title}>{title}</h1>
           <p className={styles.subtitle}>{subtitle}</p>
 
-          {!supabaseReady ? (
-            <p className={`${styles.message} ${styles.error}`}>
-              Supabase 공개 환경변수가 없어 인증을 사용할 수 없습니다. `.env.local`에
-              `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`를 추가하고 개발 서버를
-              재시작하세요.
-            </p>
-          ) : null}
+
 
           <form onSubmit={handleEmailAuth} className={styles.form}>
             <label className={styles.label} htmlFor='email'>
@@ -191,7 +185,7 @@ export default function AuthPage({ mode }) {
               </>
             ) : null}
 
-            <Button type='submit' fullWidth disabled={pending || !supabaseReady}>
+            <Button type='submit' fullWidth disabled={pending}>
               {pending ? '처리 중...' : isLogin ? '이메일로 로그인' : '이메일로 가입'}
             </Button>
           </form>
@@ -201,7 +195,7 @@ export default function AuthPage({ mode }) {
           <Button
             variant='outline'
             fullWidth
-            disabled={pending || !supabaseReady}
+            disabled={pending}
             onClick={handleGoogleAuth}
           >
             Google로 계속하기
