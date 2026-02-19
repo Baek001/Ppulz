@@ -2,15 +2,14 @@
 import ExamplesStep from '@/components/onboarding/ExamplesStep';
 
 const MOCK_CARDS = [
-    { card_id: '1', card_type: 'news', big_category: '寃쎌젣/湲덉쑖', sub_category: '利앷텒/二쇱떇', title: '肄붿뒪?? ?몄씤 留ㅻ룄?몄뿉 2500??遺뺢눼 ?꾪뿕', description: '誘멸뎅諛?湲덈━ ?몄긽 ?곕젮媛 吏?띾릺硫댁꽌 援?궡 利앹떆媛 ?쎌꽭瑜?蹂댁씠怨??덈떎.' },
-    { card_id: '2', card_type: 'news', big_category: '寃쎌젣/湲덉쑖', sub_category: '遺?숈궛', title: '?쒖슱 ?꾪뙆?멸컪 3二??곗냽 ?섎씫??, description: '嫄곕옒 ?덈꼍???댁뼱吏??媛?대뜲 湲됰ℓ臾??꾩＜濡?嫄곕옒媛 ?대（?댁?怨??덈떎.' },
-    { card_id: '3', card_type: 'bill', big_category: '?뺤튂/?됱젙', sub_category: '援?쉶/?뺣떦', title: '?꾩꽭?ш린 ?쇳빐??吏???밸퀎踰?媛쒖젙??諛쒖쓽', description: '?쇳빐???몄젙 踰붿쐞瑜??뺣??섍퀬 吏?먯콉??媛뺥솕?섎뒗 ?댁슜???닿퀬 ?덈떎.' },
-    { card_id: '4', card_type: 'bill', big_category: 'IT/怨쇳븰', sub_category: '紐⑤컮??, title: '?⑦넻踰??먯???援?Т?뚯쓽 ?듦낵', description: '?대룞?듭떊 ?⑤쭚?μ튂 ?좏넻援ъ“ 媛쒖꽑??愿??踰뺣쪧 ?먯??덉씠 ?섍껐?섏뿀??' },
-    { card_id: '5', card_type: 'news', big_category: '?ы쉶/?몃룞', sub_category: '?멸텒/蹂듭?', title: '?異쒖궛 ?梨? ?꾧툑 吏???뺣? ?④낵 ?덉쓣源?, description: '?꾨Ц媛?ㅼ? ?꾧툑 吏?먮낫?ㅻ뒗 ?셋룰????묐┰ ?섍꼍 議곗꽦???쒓툒?섎떎怨?吏?곹븳??' },
-    { card_id: '6', card_type: 'news', big_category: '?앺솢/臾명솕', sub_category: '嫄닿컯', title: '?섏젅湲??낃컧 二쇱쓽蹂?.. ?덈갑?묒쥌 ?꾩닔', description: '?쇨탳李④? 而ㅼ?硫댁꽌 ?낃컧 ?섏옄媛 湲됱쬆?섍퀬 ?덈떎.' },
+    { card_id: '1', card_type: 'news', big_category: '경제/금융', sub_category: '증권/주식', title: '코스피 외인 매도세에 2500선 붕괴 위험', description: '미국발 금리 인상 우려가 지속되면서 국내 증시가 약세를 보이고 있다.' },
+    { card_id: '2', card_type: 'news', big_category: '경제/금융', sub_category: '부동산', title: '서울 아파트값 3주 연속 하락세', description: '거래 절벽이 이어지는 가운데 급매물 위주로 거래가 이루어지고 있다.' },
+    { card_id: '3', card_type: 'bill', big_category: '정치/행정', sub_category: '국회/정당', title: '전세사기 피해 지원 특별법 개정안 발의', description: '피해자 인정 범위를 확대하고 지원책을 강화하는 내용을 담고 있다.' },
+    { card_id: '4', card_type: 'bill', big_category: 'IT/과학', sub_category: '모바일', title: '단통법 폐지안 국무회의 통과', description: '이동통신 단말장치 유통구조 개선에 관한 법률 폐지안이 의결되었다.' },
+    { card_id: '5', card_type: 'news', big_category: '사회/노동', sub_category: '인권/복지', title: '저출산 대책, 현금 지원 효과 있을까?', description: '전문가들은 현금 지원보다는 양육 환경 조성이 시급하다고 지적한다.' },
+    { card_id: '6', card_type: 'news', big_category: '생활/문화', sub_category: '건강', title: '환절기 독감 주의보... 예방접종 필수', description: '일교차가 커지면서 독감 환자가 급증하고 있다.' },
 ];
 
 export default function TestExamplesPage() {
     return <ExamplesStep cards={MOCK_CARDS} initialChecked={['1', '3', '4']} />;
 }
-
