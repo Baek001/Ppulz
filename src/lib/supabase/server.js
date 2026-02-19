@@ -2,11 +2,13 @@
 import { cookies } from 'next/headers';
 
 export async function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Hardcoded fallback for Cloudflare build env issue
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zphqsvbwuyeiwuwbznrl.supabase.co';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_6EaCYov5zNPDoEBi4An0gw_QKIMCgDe';
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase environment variables.');
+    // throw new Error('Missing Supabase environment variables.');
+    console.error('Missing Supabase environment variables.');
   }
 
   const cookieStore = await cookies();

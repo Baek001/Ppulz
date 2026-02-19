@@ -16,9 +16,9 @@ import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
 const MARKET_SCHEMA_MISSING_MESSAGE =
-  '?덉륫 留덉폆 ?뚯씠釉붿씠 ?놁뒿?덈떎. Supabase 留덉씠洹몃젅?댁뀡 20260219_prediction_market.sql???ㅽ뻾?댁＜?몄슂.';
+  '예측 마켓 테이블이 없습니다. Supabase 마이그레이션 20260219_prediction_market.sql을 실행해주세요.';
 const MARKET_BOARD_ADMIN_REQUIRED_MESSAGE =
-  '留덉폆 蹂대뱶 議고쉶瑜??꾪빐 Supabase ?쒕퉬??濡??ㅺ? ?꾩슂?⑸땲??';
+  '마켓 보드 조회를 위해 Supabase 서비스 롤 키가 필요합니다.';
 
 export async function GET() {
   if (!hasSupabaseAdminEnv()) {
@@ -151,4 +151,3 @@ export async function GET() {
     markets,
   });
 }
-

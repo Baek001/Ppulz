@@ -2,7 +2,7 @@
 import MarketBoardClient from '@/components/markets/MarketBoardClient';
 
 export const metadata = {
-  title: '留덉폆 蹂대뱶 | Ppulz',
+  title: '마켓 보드 | Ppulz',
 };
 
 export const dynamic = 'force-dynamic';
@@ -10,5 +10,3 @@ export const dynamic = 'force-dynamic';
 export default function MarketsBoardPage() {
   return <MarketBoardClient />;
 }
-
-
