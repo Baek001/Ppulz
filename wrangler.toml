@@ -1,0 +1,6 @@
+name = "ppulz-cron"
+main = "cron-worker.js"
+compatibility_date = "2025-01-01"
+
+[triggers]
+crons = ["*/15 * * * *"]

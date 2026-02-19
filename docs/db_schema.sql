@@ -35,6 +35,19 @@ create table if not exists public.hourly_analysis (
 create index if not exists idx_hourly_analysis_lookup
 on public.hourly_analysis(country, sub_category, analyzed_at desc);
 
+-- Table: seed_requests (Queue for dashboard analysis refresh)
+create table if not exists public.seed_requests (
+    sub_category text primary key,
+    requested_at timestamp with time zone default now(),
+    status text not null default 'pending' check (status in ('pending', 'processing', 'done', 'failed')),
+    attempts integer not null default 0,
+    last_error text,
+    updated_at timestamp with time zone default now()
+);
+
+create index if not exists idx_seed_requests_status_time
+on public.seed_requests(status, requested_at desc);
+
 -- RLS Policies (Optional but recommended)
 alter table public.raw_items enable row level security;
 alter table public.hourly_analysis enable row level security;
