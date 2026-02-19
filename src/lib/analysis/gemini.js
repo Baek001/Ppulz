@@ -4,6 +4,39 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_KEY);
 
+function tryParseJson(text) {
+    if (!text || typeof text !== 'string') return null;
+
+    const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    try {
+        return JSON.parse(cleaned);
+    } catch {
+        // continue
+    }
+
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const slice = cleaned.slice(firstBrace, lastBrace + 1);
+        try {
+            return JSON.parse(slice);
+        } catch {
+            // continue
+        }
+    }
+
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+        try {
+            return JSON.parse(match[0]);
+        } catch {
+            return null;
+        }
+    }
+
+    return null;
+}
+
 export async function analyzeNews(subCategory, newsItems, country = 'kr') {
     if (!newsItems || newsItems.length === 0) {
         return null;
@@ -12,35 +45,29 @@ export async function analyzeNews(subCategory, newsItems, country = 'kr') {
     const newsSummary = newsItems.map(item => `- ${item.title}: ${item.snippet}`).join('\n');
 
     const prompt = `
-You are a witty, slightly exaggerated financial analyst. Analyze the following news items regarding "${subCategory}" in ${country === 'kr' ? 'South Korea' : 'US'}.
+너는 Ppulz의 분석가다. 아래 뉴스/법안 목록을 보고 "${subCategory}"의 전반 분위기를 평가해라.
 
-Based on these news, provide:
-1. "score": 0 to 100 (integer)
-   - 0-20: Very Negative / Crisis
-    You are a witty, slightly exaggerated financial analyst (persona: "The Ppulz Analyst").
-    Your task is to analyze the following mixed list of News and Bills/Regulations for the category: "${subCategory}".
-    
-    Data:
-    ${newsSummary}
-    
-    Determine if the overall sentiment is a "Good Sign" (?몄옱), "Bad Sign" (?낆옱), or "Mixed" (?쇳빀).
-    Rules:
-    - Score: 0 (Terrible) to 100 (Amazing).
-    - Label: ?몄옱, ?낆옱, ?쇳빀, or 遺덈챸.
-    - Comment: A single, punchy, witty, 1-line comment (max 60 chars) in Korean. Be fun/sarcastic.
-    - References: Select 2 most relevant News items and 2 most relevant Bill/Regulation items from the list to support your analysis.
-    
-    Output strictly in JSON format:
-    {
-        "score": number,
-        "label": "string",
-        "comment": "string",
-        "confidence": "string",
-        "references": [
-            { "title": "string", "url": "string", "source_type": "news" or "bill" }
-        ]
-    }
-    `;
+데이터:
+${newsSummary}
+
+규칙:
+- score: 0~100 정수
+- label: "기회" | "위험" | "혼합" | "불확실"
+- comment: 한국어 한 줄, 60자 이내
+- references: 뉴스 2개 + 법안 2개 (가능한 범위에서)
+
+출력은 반드시 JSON만:
+{
+  "score": 70,
+  "label": "혼합",
+  "comment": "요약 코멘트",
+  "confidence": "low|medium|high",
+  "references": [
+    { "title": "string", "url": "string", "source_type": "news" },
+    { "title": "string", "url": "string", "source_type": "bill" }
+  ]
+}
+`;
 
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -52,10 +79,11 @@ Based on these news, provide:
         const response = await result.response;
         const text = response.text();
 
-        // Clean up markdown code blocks if present
-        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const data = tryParseJson(text);
 
-        const data = JSON.parse(cleanText);
+        if (!data || typeof data !== 'object') {
+            return { error: 'INVALID_JSON' };
+        }
 
         // Ensure references exist
         if (!data.references) data.references = [];

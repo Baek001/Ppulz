@@ -135,6 +135,10 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Admin env not configured.' }, { status: 503 });
     }
 
+    if (!process.env.GOOGLE_GEMINI_KEY) {
+      return NextResponse.json({ queued: false, reason: 'missing_key' });
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -160,7 +164,7 @@ export async function POST(request) {
       .maybeSingle();
 
     if (existingError && !isMissingTableError(existingError, 'seed_requests')) {
-      return NextResponse.json({ error: existingError.message }, { status: 500 });
+      return NextResponse.json({ queued: false, reason: 'queue_failed', error: existingError.message });
     }
 
     const seedTableMissing = !!existingError && isMissingTableError(existingError, 'seed_requests');
@@ -189,7 +193,7 @@ export async function POST(request) {
         .upsert(payload, { onConflict: 'sub_category' });
 
       if (upsertError) {
-        return NextResponse.json({ queued: false, error: upsertError.message }, { status: 500 });
+        return NextResponse.json({ queued: false, reason: 'queue_failed', error: upsertError.message });
       }
 
       return NextResponse.json({ queued: true });
@@ -200,7 +204,7 @@ export async function POST(request) {
       return NextResponse.json({ queued: true, immediate: true });
     }
 
-    return NextResponse.json({ queued: false, reason: immediateResult.reason || 'failed' }, { status: 500 });
+    return NextResponse.json({ queued: false, reason: immediateResult.reason || 'failed' });
   } catch (error) {
     return NextResponse.json({ error: error?.message ?? 'Failed to queue seed.' }, { status: 500 });
   }

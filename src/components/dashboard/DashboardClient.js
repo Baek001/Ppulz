@@ -153,6 +153,12 @@ export default function DashboardClient() {
                 setRefreshStatus('잠시 후 다시');
             } else if (payload?.reason === 'processing') {
                 setRefreshStatus('처리 중');
+            } else if (payload?.reason === 'no_items') {
+                setRefreshStatus('자료 없음');
+            } else if (payload?.reason === 'analysis_failed') {
+                setRefreshStatus('분석 실패');
+            } else if (payload?.reason === 'missing_key') {
+                setRefreshStatus('키 설정 필요');
             } else {
                 setRefreshStatus('요청 실패');
             }
