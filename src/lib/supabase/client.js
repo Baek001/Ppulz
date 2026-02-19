@@ -9,13 +9,15 @@ export function hasSupabasePublicEnv() {
 }
 
 export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Hardcoded fallback for Cloudflare build env issue
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zphqsvbwuyeiwuwbznrl.supabase.co';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_6EaCYov5zNPDoEBi4An0gw_QKIMCgDe';
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Supabase 환경변수가 없습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 설정하세요.',
-    );
+    console.error('Missing Supabase variables');
+    // throw new Error(
+    //   'Supabase 환경변수가 없습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 설정하세요.',
+    // );
   }
 
   if (!browserClient) {
