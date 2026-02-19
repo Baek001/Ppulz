@@ -75,3 +75,4 @@ export default function Header() {
   );
 }
 
+// Trigger rebuild for env vars
