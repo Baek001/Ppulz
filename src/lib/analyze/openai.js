@@ -1,10 +1,24 @@
-﻿import OpenAI from 'openai';
+import OpenAI from 'openai';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAIClient() {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        return null;
+    }
+    return new OpenAI({ apiKey });
+}
 
 export async function analyzeTopic(items, category, country) {
+    const openai = getOpenAIClient();
+    if (!openai) {
+        return {
+            score: null,
+            label: '분석 비활성',
+            comment: 'OPENAI_API_KEY가 없어 AI 분석을 건너뜁니다.',
+            confidence: 0,
+        };
+    }
+
     if (!items || items.length === 0) {
         return {
             score: null,
@@ -76,4 +90,3 @@ export async function analyzeTopic(items, category, country) {
         };
     }
 }
-

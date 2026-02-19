@@ -1,10 +1,19 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAIClient() {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        return null;
+    }
+    return new OpenAI({ apiKey });
+}
 
 export async function analyzeNews(subCategory, newsItems, country = 'kr') {
+    const openai = getOpenAIClient();
+    if (!openai) {
+        return null;
+    }
+
     if (!newsItems || newsItems.length === 0) {
         return null;
     }
