@@ -5,9 +5,9 @@ import UserMenu from './UserMenu';
 import styles from './Header.module.css';
 
 const NAV_ITEMS = [
-  { id: 'features', label: '湲곕뒫' },
-  { id: 'how-it-works', label: '?ъ슜諛⑸쾿' },
-  { id: 'prediction-market', label: '?덉륫留덉폆' },
+  { id: 'features', label: '기능' },
+  { id: 'how-it-works', label: '사용방법' },
+  { id: 'prediction-market', label: '예측마켓' },
   { id: 'faq', label: 'FAQ' },
 ];
 

@@ -30,7 +30,7 @@ export default function Footer() {
           </div>
         </div>
         <div className={styles.bottom}>
-          <p>© 2024 Ppulz. All rights reserved.</p>
+          <p>© 2026 Ppulz. All rights reserved.</p>
           <div className={styles.legal}>
             <Link href='/terms'>이용약관</Link>
             <Link href='/privacy'>개인정보처리방침</Link>
