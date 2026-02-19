@@ -1,4 +1,4 @@
-﻿import styles from './Features.module.css';
+import styles from './Features.module.css';
 
 const FEATURES = [
     {
