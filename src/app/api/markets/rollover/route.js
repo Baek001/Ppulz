@@ -1,3 +1,4 @@
+﻿export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 
 import { ensureOpenMarketsForSubCategories } from '@/lib/markets/open';
@@ -11,7 +12,7 @@ import {
 import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
 
 const MARKET_SCHEMA_MISSING_MESSAGE =
-  '예측 마켓 테이블이 없습니다. Supabase 마이그레이션 20260219_prediction_market.sql을 실행해주세요.';
+  '?덉륫 留덉폆 ?뚯씠釉붿씠 ?놁뒿?덈떎. Supabase 留덉씠洹몃젅?댁뀡 20260219_prediction_market.sql???ㅽ뻾?댁＜?몄슂.';
 
 function isCronAuthorized(request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -32,11 +33,11 @@ function isCronAuthorized(request) {
 
 async function handleRollover(request) {
   if (!isCronAuthorized(request)) {
-    return NextResponse.json({ error: '인증되지 않은 요청입니다.' }, { status: 401 });
+    return NextResponse.json({ error: '?몄쬆?섏? ?딆? ?붿껌?낅땲??' }, { status: 401 });
   }
 
   if (!hasSupabaseAdminEnv()) {
-    return NextResponse.json({ error: '서비스 롤 환경 변수가 없습니다.' }, { status: 500 });
+    return NextResponse.json({ error: '?쒕퉬??濡??섍꼍 蹂?섍? ?놁뒿?덈떎.' }, { status: 500 });
   }
 
   const admin = createAdminClient();
@@ -48,7 +49,7 @@ async function handleRollover(request) {
     if (isMarketSchemaMissingError(error)) {
       return NextResponse.json({ error: MARKET_SCHEMA_MISSING_MESSAGE }, { status: 503 });
     }
-    return NextResponse.json({ error: error?.message || '마켓 정산 작업에 실패했습니다.' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || '留덉폆 ?뺤궛 ?묒뾽???ㅽ뙣?덉뒿?덈떎.' }, { status: 500 });
   }
 
   let targetSummary;
@@ -61,7 +62,7 @@ async function handleRollover(request) {
     if (isMarketSchemaMissingError(error)) {
       return NextResponse.json({ error: MARKET_SCHEMA_MISSING_MESSAGE }, { status: 503 });
     }
-    return NextResponse.json({ error: error?.message || '마켓 대상 선정에 실패했습니다.' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || '留덉폆 ????좎젙???ㅽ뙣?덉뒿?덈떎.' }, { status: 500 });
   }
 
   let openSummary;
@@ -71,7 +72,7 @@ async function handleRollover(request) {
     if (isMarketSchemaMissingError(error)) {
       return NextResponse.json({ error: MARKET_SCHEMA_MISSING_MESSAGE }, { status: 503 });
     }
-    return NextResponse.json({ error: error?.message || '마켓 오픈 보장 작업에 실패했습니다.' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || '留덉폆 ?ㅽ뵂 蹂댁옣 ?묒뾽???ㅽ뙣?덉뒿?덈떎.' }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -99,3 +100,4 @@ export async function POST(request) {
 export async function GET(request) {
   return handleRollover(request);
 }
+

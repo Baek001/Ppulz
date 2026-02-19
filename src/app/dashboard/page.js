@@ -1,4 +1,5 @@
-﻿import { redirect } from 'next/navigation';
+﻿export const runtime = 'edge';
+import { redirect } from 'next/navigation';
 
 import SetupErrorState from '@/components/onboarding/SetupErrorState';
 import { toOnboardingErrorMessage } from '@/lib/onboarding/errors';
@@ -28,4 +29,5 @@ export default async function DashboardPage() {
 
   return <DashboardClient />;
 }
+
 

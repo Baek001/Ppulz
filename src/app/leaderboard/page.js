@@ -1,4 +1,5 @@
-﻿import { redirect } from 'next/navigation';
+﻿export const runtime = 'edge';
+import { redirect } from 'next/navigation';
 
 import LeaderboardClient from '@/components/leaderboard/LeaderboardClient';
 import SetupErrorState from '@/components/onboarding/SetupErrorState';
@@ -27,4 +28,5 @@ export default async function LeaderboardPage() {
 
   return <LeaderboardClient />;
 }
+
 

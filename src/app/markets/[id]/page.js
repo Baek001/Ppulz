@@ -1,4 +1,5 @@
-﻿import { redirect } from 'next/navigation';
+export const runtime = 'edge';
+import { redirect } from 'next/navigation';
 
 import MarketDetailClient from '@/components/markets/MarketDetailClient';
 import SetupErrorState from '@/components/onboarding/SetupErrorState';

@@ -1,4 +1,5 @@
-﻿import { NextResponse } from 'next/server';
+﻿export const runtime = 'edge';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getOrCreateOnboardingRow } from '@/lib/onboarding/guards';
@@ -89,3 +90,4 @@ export async function POST(request) {
     return NextResponse.json({ error: error?.message ?? '온보딩 완료 처리 실패' }, { status: 500 });
   }
 }
+

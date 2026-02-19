@@ -1,4 +1,5 @@
-﻿import { redirect } from 'next/navigation';
+﻿export const runtime = 'edge';
+import { redirect } from 'next/navigation';
 
 import SetupErrorState from '@/components/onboarding/SetupErrorState';
 import SubcategoriesStep from '@/components/onboarding/SubcategoriesStep';
@@ -42,4 +43,5 @@ export default async function SubcategoriesPage({ searchParams }) {
     />
   );
 }
+
 

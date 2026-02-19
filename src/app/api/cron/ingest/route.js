@@ -1,3 +1,4 @@
+﻿export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SEARCH_QUERIES } from '@/lib/constants/search_queries';
@@ -44,7 +45,7 @@ export async function GET(request) {
     // Fallback for Cold Start
     if (allSubs.length === 0) {
         console.log('No user categories found. Using default fallback categories.');
-        allSubs = ['증권/주식', '테크/IT', '부동산'];
+        allSubs = ['利앷텒/二쇱떇', '?뚰겕/IT', '遺?숈궛'];
     }
 
     const results = [];
@@ -66,7 +67,7 @@ export async function GET(request) {
         const requests = [
             fetchNews(sub, 'kr', queries.KR), // KR News
             fetchNews(sub, 'us', queries.US), // US News
-            fetchNews(sub + ' 법안', 'kr', queries.KR ? `(${queries.KR}) AND (법안 OR 규제 OR 정책)` : `${sub} 법안 규제`), // KR Bill Proxy
+            fetchNews(sub + ' 踰뺤븞', 'kr', queries.KR ? `(${queries.KR}) AND (踰뺤븞 OR 洹쒖젣 OR ?뺤콉)` : `${sub} 踰뺤븞 洹쒖젣`), // KR Bill Proxy
             fetchNews(sub + ' Bill', 'us', queries.US ? `(${queries.US}) AND (bill OR regulation OR legislation)` : `${sub} bill regulation`) // US Bill Proxy
         ];
 
@@ -153,3 +154,4 @@ export async function GET(request) {
         logs: logs
     });
 }
+

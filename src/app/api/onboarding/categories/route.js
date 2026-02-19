@@ -1,4 +1,5 @@
-﻿import { NextResponse } from 'next/server';
+﻿export const runtime = 'edge';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { BIG_CATEGORIES } from '@/lib/constants/categories';
@@ -63,3 +64,4 @@ export async function POST(request) {
     return NextResponse.json({ error: error?.message ?? '대분류 저장 실패' }, { status: 500 });
   }
 }
+

@@ -1,3 +1,4 @@
+﻿export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { analyzeTopic } from '@/lib/analyze/openai';
@@ -61,3 +62,4 @@ export async function GET(request) {
         analyzed: results
     });
 }
+

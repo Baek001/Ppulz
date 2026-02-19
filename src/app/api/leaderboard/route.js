@@ -1,3 +1,4 @@
+﻿export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 
 import { createClient } from '@/lib/supabase/server';
@@ -5,7 +6,7 @@ import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
 import { isMarketSchemaMissingError, maskEmail } from '@/lib/markets/server';
 
 const MARKET_SCHEMA_MISSING_MESSAGE =
-  '예측 마켓 테이블이 없습니다. Supabase 마이그레이션 20260219_prediction_market.sql을 실행해주세요.';
+  '?덉륫 留덉폆 ?뚯씠釉붿씠 ?놁뒿?덈떎. Supabase 留덉씠洹몃젅?댁뀡 20260219_prediction_market.sql???ㅽ뻾?댁＜?몄슂.';
 
 function getSinceDate(period) {
   const now = Date.now();
@@ -73,7 +74,7 @@ export async function GET(request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
+    return NextResponse.json({ error: '?몄쬆???꾩슂?⑸땲??' }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -100,7 +101,7 @@ export async function GET(request) {
         {
           rank: 1,
           userId: user.id,
-          displayName: '나',
+          displayName: '??,
           resolvedCount: Number(ownStats?.resolved_count) || 0,
           winCount: Number(ownStats?.win_count) || 0,
           hitRate: Number(ownStats?.hit_rate) || 0,
@@ -206,3 +207,4 @@ export async function GET(request) {
     mine,
   });
 }
+

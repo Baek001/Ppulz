@@ -1,3 +1,4 @@
+﻿export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 
 import { resolveDueMarkets } from '@/lib/markets/resolve';
@@ -5,7 +6,7 @@ import { isMarketSchemaMissingError } from '@/lib/markets/server';
 import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
 
 const MARKET_SCHEMA_MISSING_MESSAGE =
-  '예측 마켓 테이블이 없습니다. Supabase 마이그레이션 20260219_prediction_market.sql을 실행해주세요.';
+  '?덉륫 留덉폆 ?뚯씠釉붿씠 ?놁뒿?덈떎. Supabase 留덉씠洹몃젅?댁뀡 20260219_prediction_market.sql???ㅽ뻾?댁＜?몄슂.';
 
 function isCronAuthorized(request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -26,11 +27,11 @@ function isCronAuthorized(request) {
 
 async function handleResolve(request) {
   if (!isCronAuthorized(request)) {
-    return NextResponse.json({ error: '인증되지 않은 요청입니다.' }, { status: 401 });
+    return NextResponse.json({ error: '?몄쬆?섏? ?딆? ?붿껌?낅땲??' }, { status: 401 });
   }
 
   if (!hasSupabaseAdminEnv()) {
-    return NextResponse.json({ error: '서비스 롤 환경 변수가 없습니다.' }, { status: 500 });
+    return NextResponse.json({ error: '?쒕퉬??濡??섍꼍 蹂?섍? ?놁뒿?덈떎.' }, { status: 500 });
   }
 
   const admin = createAdminClient();
@@ -42,7 +43,7 @@ async function handleResolve(request) {
     if (isMarketSchemaMissingError(error)) {
       return NextResponse.json({ error: MARKET_SCHEMA_MISSING_MESSAGE }, { status: 503 });
     }
-    return NextResponse.json({ error: error?.message || '정산 처리에 실패했습니다.' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || '?뺤궛 泥섎━???ㅽ뙣?덉뒿?덈떎.' }, { status: 500 });
   }
 
   const normalizedResults = (summary.results || []).map((item) => {
@@ -69,3 +70,4 @@ export async function POST(request) {
 export async function GET(request) {
   return handleResolve(request);
 }
+

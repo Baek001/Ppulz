@@ -1,3 +1,4 @@
+﻿export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 
 import { createClient } from '@/lib/supabase/server';
@@ -15,7 +16,7 @@ import {
 } from '@/lib/markets/server';
 
 const MARKET_SCHEMA_MISSING_MESSAGE =
-  '예측 마켓 테이블이 없습니다. Supabase 마이그레이션 20260219_prediction_market.sql을 실행해주세요.';
+  '?덉륫 留덉폆 ?뚯씠釉붿씠 ?놁뒿?덈떎. Supabase 留덉씠洹몃젅?댁뀡 20260219_prediction_market.sql???ㅽ뻾?댁＜?몄슂.';
 
 export async function GET(request) {
   const supabase = await createClient();
@@ -24,7 +25,7 @@ export async function GET(request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
+    return NextResponse.json({ error: '?몄쬆???꾩슂?⑸땲??' }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -39,7 +40,7 @@ export async function GET(request) {
     .single();
 
   if (onboardingError || !onboarding) {
-    return NextResponse.json({ error: onboardingError?.message || '온보딩 정보를 찾을 수 없습니다.' }, { status: 404 });
+    return NextResponse.json({ error: onboardingError?.message || '?⑤낫???뺣낫瑜?李얠쓣 ???놁뒿?덈떎.' }, { status: 404 });
   }
 
   const allSubCategories = extractSubCategories(onboarding.sub_categories);
@@ -132,3 +133,4 @@ export async function GET(request) {
     markets: marketViews,
   });
 }
+

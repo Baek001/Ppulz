@@ -1,4 +1,5 @@
-﻿import { redirect } from 'next/navigation';
+﻿export const runtime = 'edge';
+import { redirect } from 'next/navigation';
 
 import CategoriesStep from '@/components/onboarding/CategoriesStep';
 import SetupErrorState from '@/components/onboarding/SetupErrorState';
@@ -29,4 +30,5 @@ export default async function CategoriesPage({ searchParams }) {
 
   return <CategoriesStep initialSelected={onboarding.big_categories} editMode={editMode} />;
 }
+
 

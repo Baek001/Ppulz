@@ -1,4 +1,5 @@
-﻿import AuthPage from '@/components/auth/AuthPage';
+﻿export const runtime = 'edge';
+import AuthPage from '@/components/auth/AuthPage';
 
 export const metadata = {
   title: '회원가입 | Ppulz',
@@ -7,4 +8,5 @@ export const metadata = {
 export default function SignupPage() {
   return <AuthPage mode='signup' />;
 }
+
 

@@ -1,4 +1,5 @@
-﻿import { redirect } from 'next/navigation';
+﻿export const runtime = 'edge';
+import { redirect } from 'next/navigation';
 
 import ExamplesStep from '@/components/onboarding/ExamplesStep';
 import SetupErrorState from '@/components/onboarding/SetupErrorState';
@@ -80,4 +81,5 @@ export default async function ExamplesPage({ searchParams }) {
 
   return <ExamplesStep cards={selectedCards} initialChecked={initialChecked} />;
 }
+
 

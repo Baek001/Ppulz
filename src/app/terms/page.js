@@ -1,4 +1,5 @@
-﻿import Link from 'next/link';
+﻿export const runtime = 'edge';
+import Link from 'next/link';
 
 import styles from '@/app/legal.module.css';
 
@@ -59,4 +60,5 @@ export default function TermsPage() {
     </main>
   );
 }
+
 
