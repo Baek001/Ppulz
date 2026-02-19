@@ -49,6 +49,12 @@ function isNoRowsError(error) {
   return error?.code === 'PGRST116';
 }
 
+function isDuplicateKeyError(error) {
+  if (!error) return false;
+  if (error.code === '23505') return true;
+  return String(error.message || '').toLowerCase().includes('duplicate key');
+}
+
 export async function getOrCreateOnboardingRow(supabase, userId) {
   const { data, error } = await supabase
     .from('user_onboarding')
@@ -64,15 +70,9 @@ export async function getOrCreateOnboardingRow(supabase, userId) {
     return normalizeOnboardingRow(data);
   }
 
-  const { data: inserted, error: insertError } = await supabase
+  const { error: insertError } = await supabase
     .from('user_onboarding')
-    .insert(buildDefaultOnboardingRow(userId))
-    .select('*')
-    .single();
-
-  if (!insertError && inserted) {
-    return normalizeOnboardingRow(inserted);
-  }
+    .upsert(buildDefaultOnboardingRow(userId), { onConflict: 'user_id', ignoreDuplicates: true });
 
   const { data: retried, error: retryError } = await supabase
     .from('user_onboarding')
@@ -81,7 +81,9 @@ export async function getOrCreateOnboardingRow(supabase, userId) {
     .maybeSingle();
 
   if (retryError || !retried) {
-    throw new Error(insertError?.message ?? retryError?.message ?? 'Failed to create onboarding row.');
+    throw new Error(
+      insertError?.message ?? retryError?.message ?? 'Failed to create onboarding row.',
+    );
   }
 
   return normalizeOnboardingRow(retried);
