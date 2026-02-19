@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "pages:build": "next-on-pages",
     "lint": "eslint",
     "import:example-cards": "tsx scripts/import_example_cards.ts"
   },
@@ -22,6 +23,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@cloudflare/next-on-pages": "^1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tsx": "^4.21.0"
