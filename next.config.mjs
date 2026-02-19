@@ -1,6 +1,8 @@
 ﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
-  devIndicators: false,
+  devIndicators: {
+    appIsrStatus: false,
+  },
 };
 
 export default nextConfig;
