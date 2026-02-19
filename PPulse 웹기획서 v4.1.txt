@@ -1,0 +1,510 @@
+PPulse 웹기획서 v4.1
+범위: 뉴스/법안 무료 수집, 소분류 키워드 사전, 매시간 AI 분석, 대시보드 그래프 표시
+
+목표
+
+사용자가 고른 소분류 5개에 대해 한국/미국 뉴스와 법안 신호를 수집한다.
+
+매시간 소분류별로 0~100 점수와 1줄 분석 문구를 생성한다.
+
+대시보드에서 소분류 5개 탭을 전환하며 큰 그래프 1개로 점수 변화를 보여준다.
+
+뉴스/법안 원문 소비는 핵심이 아니므로, 화면에는 최소한만 노출한다(기본은 그래프와 점수, 문구 중심).
+
+사용자 설정(온보딩 이후 데이터 파이프라인 입력값)
+
+대분류 8개 중 3개 선택
+
+각 대분류에 소분류 6개 존재
+
+소분류 최종 선택 총 5개(2+2+1 규칙)
+
+예시 뉴스/법안 카드에서 최대 6개 체크(성향 데이터, 선택)
+
+데이터 소스
+3.1 뉴스 수집: Google News RSS (무료, 키 없이 사용)
+형식
+
+한국:
+https://news.google.com/rss/search?q={QUERY}&hl=ko&gl=KR&ceid=KR:ko
+
+미국:
+https://news.google.com/rss/search?q={QUERY}&hl=en-US&gl=US&ceid=US:en
+
+규칙
+
+QUERY는 반드시 URL 인코딩한다.
+
+소분류별 키워드 사전을 사용해 QUERY를 만든다.
+
+최근성 필터를 쓰고 싶으면 QUERY 끝에 when:1h 또는 when:24h를 옵션으로 붙인다(적용 여부는 구현에서 확인).
+
+3.2 법안 수집: 무료 공개 API
+한국
+
+data.go.kr 국회 의안정보 API(무료 키 필요, 환경변수로 주입)
+
+미국
+
+Congress.gov API 또는 공개 데이터(govinfo 등) 중 구현이 쉬운 경로를 선택
+
+초기에는 뉴스 파이프라인을 먼저 완성하고 법안은 2순위로 붙여도 됨
+
+수집 및 분석 주기
+4.1 수집 주기
+
+뉴스 RSS 수집: 10분마다
+
+법안 수집: 60분마다(법안은 변화가 느림)
+
+4.2 분석 주기
+
+매시간 1회, 소분류별 분석 실행
+
+기본은 정시 버킷(예: 13:00~13:59) 기준 권장
+
+4.3 대시보드 갱신
+
+대시보드는 가장 최신 시간 버킷의 분석 결과를 표시
+
+그래프는 가입 시점 기준 최소 3포인트를 확보하도록 “가입 시점 2시간 전부터” 백필을 수행(최초 1회)
+
+데이터 저장 구조(최소 테이블)
+5.1 news_items
+
+id
+
+country: KR 또는 US
+
+sub_category
+
+big_category
+
+title
+
+url
+
+published_at
+
+fetched_at
+
+source
+
+5.2 bill_items
+
+id
+
+country: KR 또는 US
+
+sub_category
+
+big_category
+
+title
+
+url
+
+status(단계)
+
+last_action_at
+
+fetched_at
+
+source
+
+5.3 hourly_analysis
+
+id
+
+sub_category
+
+big_category
+
+country_scope: all 또는 KR 또는 US
+
+bucket_start_at: 시간 버킷 시작 시각
+
+score: 0~100 정수 또는 null
+
+label: 호재 또는 악재 또는 혼합 또는 불명
+
+comment: 유쾌하고 과장 섞인 1줄
+
+confidence: 낮음 또는 중간 또는 높음
+
+news_count, bill_count
+
+created_at
+
+유니크: (sub_category, country_scope, bucket_start_at)
+
+분석 생성(매시간) 입력과 출력
+6.1 입력 데이터(소분류별)
+
+지난 1시간 뉴스 기사 제목 목록(최대 30)
+
+지난 24시간 법안 제목 및 단계 목록(최대 30)
+
+참고 집계값
+
+뉴스 총량, 법안 총량
+
+필요하면 간단 키워드 기반 긍정/부정/중립 개수
+
+6.2 OpenAI 분석 출력(JSON 고정)
+
+score: 0~100 정수
+
+label: 호재 또는 악재 또는 혼합 또는 불명
+
+comment: 1줄, 60자 이내 권장, 유쾌/과장 톤
+
+confidence: 낮음 또는 중간 또는 높음
+
+불명 처리
+
+입력 데이터가 너무 적으면 score는 null, label은 불명, comment는 “데이터 부족, 판단 보류” 계열로 고정
+
+대시보드 화면 기획(메인)
+7.1 상단바
+
+좌: 로고
+
+우: 국가 토글(전체/한국/미국), 마지막 분석 시각
+
+7.2 상단 탭
+
+사용자 선택 소분류 5개만 탭으로 노출
+
+탭 라벨: 소분류(작게 대분류 보조 표기 가능)
+
+7.3 큰 그래프 1개
+
+선택된 소분류의 hourly_analysis 시계열
+
+1시간 단위 포인트
+
+가입 시점 기준 2시간 전부터 최소 3포인트
+
+7.4 그래프 바로 아래 분석 영역
+
+comment 1줄
+
+score 숫자(0~100) 크게
+
+색상: 낮을수록 빨강, 높을수록 초록
+
+label 배지(호재/악재/혼합/불명)
+
+소분류 키워드 사전(한국/미국)
+규칙
+
+아래 QUERY 문자열은 “인코딩 전 원문”이다.
+
+실제 RSS 요청에는 URL 인코딩해서 넣는다.
+
+검색 정확도가 떨어지면 OR 키워드를 추가하되 8개 이상은 피한다.
+
+8.1 금융자산
+주식
+
+KR QUERY: 주식 OR 증시 OR 코스피 OR 코스닥 OR 실적 OR 공시
+
+US QUERY: stock OR stocks OR equities OR earnings OR SEC filing OR guidance
+
+채권
+
+KR QUERY: 채권 OR 국채 OR 회사채 OR 금리차 OR 스프레드 OR 신용등급
+
+US QUERY: bond OR bonds OR treasury OR corporate bond OR spread OR credit rating
+
+ETF
+
+KR QUERY: ETF OR 상장지수 OR 지수추종 OR 리밸런싱 OR 테마 ETF
+
+US QUERY: ETF OR index fund OR rebalancing OR sector ETF OR thematic ETF
+
+금리
+
+KR QUERY: 기준금리 OR 금리인상 OR 금리인하 OR 물가 OR 인플레이션 OR 통화정책
+
+US QUERY: interest rate OR rate hike OR rate cut OR inflation OR Fed OR monetary policy
+
+외환
+
+KR QUERY: 환율 OR 달러원 OR 달러 강세 OR 원화 약세 OR 외환시장 OR 환헤지
+
+US QUERY: FX OR exchange rate OR dollar strength OR currency market OR hedging
+
+파생
+
+KR QUERY: 선물 OR 옵션 OR 변동성 OR 증거금 OR 헤지 OR 파생상품
+
+US QUERY: futures OR options OR volatility OR margin requirement OR hedging OR derivatives
+
+8.2 디지털자산
+코인
+
+KR QUERY: 가상자산 OR 코인 OR 알트코인 OR 시세 변동 OR 비트코인 OR 이더리움
+
+US QUERY: crypto OR cryptocurrency OR altcoin OR Bitcoin OR Ethereum OR price volatility
+
+스테이블코인
+
+KR QUERY: 스테이블코인 OR 준비금 OR 디페그 OR 발행 OR 상환 OR 결제
+
+US QUERY: stablecoin OR reserves OR depeg OR issuance OR redemption OR payments
+
+거래소
+
+KR QUERY: 거래소 OR 상장 OR 상폐 OR 수수료 OR 현물거래 OR 파생거래
+
+US QUERY: crypto exchange OR listing OR delisting OR trading fees OR spot trading OR derivatives
+
+디파이
+
+KR QUERY: 디파이 OR 예치 OR 대출 OR 덱스 OR 유동성 OR 청산
+
+US QUERY: DeFi OR lending OR borrowing OR DEX OR liquidity OR liquidation
+
+지갑
+
+KR QUERY: 지갑 OR 개인지갑 OR 콜드월렛 OR 키관리 OR 전송 수수료
+
+US QUERY: wallet OR self custody OR cold wallet OR key management OR transfer fee
+
+보안
+
+KR QUERY: 해킹 OR 취약점 OR 보안사고 OR 탈취 OR 침해 OR 감사
+
+US QUERY: hack OR exploit OR security breach OR stolen funds OR vulnerability OR audit
+
+8.3 실물상품소비
+식품
+
+KR QUERY: 식품 OR 원재료 가격 OR 원산지 OR 식품 안전 OR 물가 OR 공급
+
+US QUERY: food OR commodity price OR food safety OR origin labeling OR inflation OR supply
+
+유통
+
+KR QUERY: 유통 OR 이커머스 OR 배송비 OR 수수료 OR 할인 OR 재고
+
+US QUERY: retail OR e commerce OR delivery fee OR platform fee OR discount OR inventory
+
+전자제품
+
+KR QUERY: 전자제품 OR 반도체 수급 OR 부품 OR 인증 OR 리콜 OR 출시
+
+US QUERY: electronics OR components OR supply chain OR certification OR recall OR product launch
+
+화장품
+
+KR QUERY: 화장품 OR 표시광고 OR 성분 OR 수출 OR 인증 OR 규제
+
+US QUERY: cosmetics OR labeling OR ingredients OR export OR certification OR regulation
+
+생활용품
+
+KR QUERY: 생활용품 OR 안전기준 OR 유해성 OR 인증 OR 원산지 OR 리콜
+
+US QUERY: consumer goods OR safety standard OR certification OR recall OR origin labeling
+
+리콜
+
+KR QUERY: 리콜 OR 결함 OR 안전사고 OR 품질 문제 OR 환불 OR 교환
+
+US QUERY: recall OR defect OR safety incident OR quality issue OR refund OR replacement
+
+8.4 부동산인프라
+주거
+
+KR QUERY: 주택 OR 아파트 OR 전세 OR 매매 OR 대출 규제 OR 금리
+
+US QUERY: housing OR home price OR mortgage OR rent OR housing policy OR interest rate
+
+상업용
+
+KR QUERY: 상업용 부동산 OR 오피스 OR 공실 OR 임대료 OR 수익률 OR 캡레이트
+
+US QUERY: commercial real estate OR office vacancy OR rent OR cap rate OR yield
+
+임대차
+
+KR QUERY: 임대차 OR 전월세 OR 보증금 OR 계약갱신 OR 임대료 OR 분쟁
+
+US QUERY: lease OR rental contract OR deposit OR rent increase OR tenant protection
+
+재건축
+
+KR QUERY: 재건축 OR 안전진단 OR 인허가 OR 규제 완화 OR 부담금 OR 조합
+
+US QUERY: redevelopment OR zoning OR permit OR safety inspection OR urban renewal
+
+재개발
+
+KR QUERY: 재개발 OR 정비사업 OR 인허가 OR 사업성 OR 조합 OR 공공참여
+
+US QUERY: urban redevelopment OR renewal project OR permit OR project feasibility OR public participation
+
+PF
+
+KR QUERY: PF OR 프로젝트파이낸싱 OR 브릿지론 OR 유동성 OR 연체 OR 보증
+
+US QUERY: project finance OR construction loan OR liquidity OR default risk OR guarantee
+
+8.5 에너지환경
+전력
+
+KR QUERY: 전기요금 OR 전력시장 OR 발전 OR 예비력 OR 계통 OR 정산
+
+US QUERY: electricity price OR power market OR generation OR grid OR capacity OR settlement
+
+가스
+
+KR QUERY: 가스요금 OR LNG OR 재고 OR 수입 단가 OR 공급 OR 도시가스
+
+US QUERY: natural gas price OR LNG OR storage OR import cost OR supply
+
+석유
+
+KR QUERY: 유가 OR 정유 OR 재고 OR 산유국 OR 원유 OR 마진
+
+US QUERY: oil price OR crude OR refinery margin OR inventory OR OPEC
+
+신재생
+
+KR QUERY: 신재생 OR 태양광 OR 풍력 OR 보조금 OR 계통연계 OR 발전사업
+
+US QUERY: renewable energy OR solar OR wind OR subsidy OR grid interconnection
+
+탄소
+
+KR QUERY: 탄소 OR 배출권 OR 탄소중립 OR 규제 강화 OR 감축 OR ETS
+
+US QUERY: carbon OR emissions trading OR net zero OR carbon regulation OR ETS
+
+광물
+
+KR QUERY: 핵심광물 OR 리튬 OR 니켈 OR 공급망 OR 자원안보 OR 수입규제
+
+US QUERY: critical minerals OR lithium OR nickel OR supply chain OR resource security
+
+8.6 산업기술규제
+AI
+
+KR QUERY: AI 규제 OR AI 안전 OR AI 검증 OR 책임 OR 가이드라인 OR 인공지능
+
+US QUERY: AI regulation OR AI safety OR model evaluation OR liability OR AI governance
+
+데이터
+
+KR QUERY: 데이터 활용 OR 데이터 결합 OR 데이터 이동 OR 데이터 규정 OR 데이터 보안
+
+US QUERY: data governance OR data sharing OR data portability OR data regulation OR data security
+
+개인정보
+
+KR QUERY: 개인정보 OR 동의 OR 국외이전 OR 벌칙 OR 처리 기준 OR 프라이버시
+
+US QUERY: privacy OR personal data OR consent OR cross border transfer OR penalties
+
+플랫폼
+
+KR QUERY: 플랫폼 규제 OR 수수료 OR 독점 OR 공정 OR 입점 OR 알고리즘
+
+US QUERY: platform regulation OR antitrust OR fees OR marketplace OR algorithm transparency
+
+반도체
+
+KR QUERY: 반도체 OR 공급망 OR 보조금 OR 수출 규제 OR 재고 OR 설비투자
+
+US QUERY: semiconductors OR supply chain OR subsidy OR export controls OR inventory
+
+수출통제
+
+KR QUERY: 수출통제 OR 제재 OR 허가 OR 규정 강화 OR 수출 제한 OR 통관
+
+US QUERY: export controls OR sanctions OR licensing OR restriction OR compliance
+
+8.7 모빌리티물류
+자동차
+
+KR QUERY: 자동차 OR 안전기준 OR 인증 OR 리콜 OR 부품 OR 배출 규제
+
+US QUERY: auto OR vehicle safety OR certification OR recall OR emissions regulation
+
+전기차
+
+KR QUERY: 전기차 OR 보조금 OR 충전 인프라 OR 배터리 안전 OR 판매 둔화
+
+US QUERY: EV OR subsidy OR charging infrastructure OR battery safety OR sales slowdown
+
+배터리
+
+KR QUERY: 배터리 OR 원재료 OR 화재 OR 인증 OR 재활용 OR 공급망
+
+US QUERY: battery OR materials OR fire risk OR certification OR recycling OR supply chain
+
+자율주행
+
+KR QUERY: 자율주행 OR 실증 OR 사고 책임 OR 규제 OR 지도 데이터 OR 센서
+
+US QUERY: autonomous driving OR testing permit OR liability OR regulation OR sensor
+
+항공
+
+KR QUERY: 항공 OR 운임 OR 안전 점검 OR 지연 OR 연료비 OR 수요 회복
+
+US QUERY: airline OR airfare OR safety inspection OR delay OR fuel cost OR demand
+
+해운
+
+KR QUERY: 해운 OR 운임 OR 항만 OR 물류 지연 OR 환경 규제 OR 선박
+
+US QUERY: shipping OR freight rate OR port congestion OR logistics delay OR IMO regulation
+
+8.8 공공사회
+세제
+
+KR QUERY: 세율 OR 공제 OR 과세 OR 세액공제 OR 세법 개정 OR 부담
+
+US QUERY: tax rate OR deduction OR tax credit OR tax reform OR IRS
+
+노동
+
+KR QUERY: 노동 OR 근로시간 OR 최저임금 OR 산재 OR 고용 OR 노사
+
+US QUERY: labor law OR minimum wage OR working hours OR workplace safety OR employment
+
+보건
+
+KR QUERY: 보건 OR 건강보험 OR 급여 기준 OR 의료 정책 OR 감염 대응 OR 병원
+
+US QUERY: healthcare policy OR insurance coverage OR reimbursement OR public health
+
+교육
+
+KR QUERY: 교육 정책 OR 예산 OR 제도 개편 OR 디지털 교육 OR 입시 OR 학교
+
+US QUERY: education policy OR budget OR curriculum reform OR digital learning
+
+재난안전
+
+KR QUERY: 재난 OR 안전 점검 OR 대응 체계 OR 보험 보상 OR 위기관리
+
+US QUERY: disaster response OR safety inspection OR emergency management OR insurance compensation
+
+국방
+
+KR QUERY: 국방 예산 OR 조달 OR 무기 수출 OR 승인 OR 안보 OR 방위산업
+
+US QUERY: defense budget OR procurement OR arms export OR security policy OR defense industry
+
+구현 지시(안티그래비티에 넣을 요약)
+
+위 키워드 사전을 코드에 포함해 소분류별 RSS 수집 쿼리를 구성한다.
+
+뉴스 수집은 10분마다, 법안은 60분마다, 분석은 60분마다 실행한다.
+
+분석 결과는 hourly_analysis에 저장하고 /dashboard는 이를 조회해 그래프와 문구를 출력한다.

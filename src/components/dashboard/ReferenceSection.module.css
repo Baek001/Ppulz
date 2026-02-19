@@ -1,0 +1,124 @@
+﻿.container {
+    margin-top: 24px;
+    padding: 16px;
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.newsSection,
+.billsSection {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #333;
+    margin: 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #ddd;
+}
+
+.newsGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.newsCard {
+    display: block;
+    padding: 12px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.newsCard:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.provider {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.newsText {
+    font-size: 14px;
+    line-height: 1.45;
+    color: #222;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.billsSection {
+    border-top: 1px solid #e0e0e0;
+    padding-top: 8px;
+}
+
+.billsList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.billRow {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background-color: #ffffff;
+    text-decoration: none;
+    color: inherit;
+}
+
+.billDot {
+    color: #7a8594;
+    line-height: 1.2;
+}
+
+.billText {
+    font-size: 13px;
+    line-height: 1.35;
+    color: #444;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.empty {
+    grid-column: 1 / -1;
+    font-size: 14px;
+    color: #999;
+    text-align: center;
+    padding: 20px 0;
+}
+
+.emptyCompact {
+    font-size: 13px;
+    color: #999;
+    text-align: left;
+    padding: 4px 2px;
+}
+
+@media (max-width: 768px) {
+    .newsGrid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,88 @@
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 74px;
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+}
+
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: -0.5px;
+}
+
+.nav {
+  display: flex;
+  gap: 32px;
+}
+
+.nav a {
+  font-size: 16px;
+  color: var(--text-sub);
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.nav a:hover {
+  color: var(--text-main);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.userMenuWrap {
+  margin-top: 8px;
+}
+
+.actionGhost,
+.actionPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 35px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.actionGhost {
+  color: var(--text-sub);
+}
+
+.actionGhost:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-main);
+}
+
+.actionPrimary {
+  background-color: var(--primary);
+  color: var(--text-white);
+}
+
+.actionPrimary:hover {
+  background-color: var(--primary-hover);
+}
+
+@media (max-width: 768px) {
+  .nav {
+    display: none;
+  }
+}
+

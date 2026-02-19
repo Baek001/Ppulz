@@ -1,0 +1,191 @@
+.section {
+  margin: 0 20px 24px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.headerMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.walletBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.leaderboardLink {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-sub);
+  background: var(--surface-alt);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--surface-alt);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cardTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+.timeText {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.crowdWrap {
+  margin-top: 10px;
+}
+
+.crowdBar {
+  display: flex;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  height: 10px;
+}
+
+.crowdUp {
+  background: #16c47f;
+}
+
+.crowdDown {
+  background: #f04452;
+}
+
+.crowdMeta {
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.buttonRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.voteBtn {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+
+.voteBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.upBtn {
+  color: #16a96d;
+  background: #f3fff9;
+}
+
+.downBtn {
+  color: #d83947;
+  background: #fff5f6;
+}
+
+.selectedUp {
+  background: #16c47f;
+  color: #fff;
+  border-color: #16c47f;
+}
+
+.selectedDown {
+  background: #f04452;
+  color: #fff;
+  border-color: #f04452;
+}
+
+.metaRow {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.myPick {
+  font-size: 12px;
+  color: var(--text-sub);
+  font-weight: 600;
+}
+
+.detailLink {
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--red);
+}

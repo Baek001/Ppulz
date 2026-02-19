@@ -1,0 +1,150 @@
+.card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+    text-align: left;
+    height: 100%;
+}
+
+.card[data-type='news'] {
+    background-color: #f5f9ff;
+    border-color: #d6e7ff;
+}
+
+.card[data-type='bill'] {
+    background-color: #fff8f2;
+    border-color: #ffe3c2;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.card[data-type='news']:hover {
+    border-color: #8bb4ff;
+}
+
+.card[data-type='bill']:hover {
+    border-color: #ffbe73;
+}
+
+.selected {
+    border-width: 2px;
+}
+
+.card[data-type='news'].selected {
+    border-color: #1b64da;
+    background-color: #edf5ff;
+}
+
+.card[data-type='bill'].selected {
+    border-color: #d07a1a;
+    background-color: #fff2e5;
+}
+
+/* Badge at top */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.badge {
+    padding: 4px 8px;
+    background-color: var(--surface-alt);
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-sub);
+}
+
+.card[data-type='news'] .badge {
+    background-color: #e3f0ff;
+    color: #1b64da;
+}
+
+.card[data-type='bill'] .badge {
+    background-color: #ffeede;
+    color: #b86000;
+}
+
+.category {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 8px;
+    line-height: 1.4;
+    word-break: keep-all;
+
+    /* Max 2 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.description {
+    font-size: 14px;
+    color: var(--text-sub);
+    line-height: 1.5;
+
+    /* Max 2 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.checkOverlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background-color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.selected .checkOverlay {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.card[data-type='news'].selected .checkOverlay {
+    background-color: #1b64da;
+    border-color: #1b64da;
+}
+
+.card[data-type='bill'].selected .checkOverlay {
+    background-color: #d07a1a;
+    border-color: #d07a1a;
+}
+
+.checkIcon {
+    opacity: 0;
+    transition: all 0.2s ease;
+    color: white;
+}
+
+.selected .checkIcon {
+    opacity: 1;
+}

@@ -1,0 +1,30 @@
+﻿.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(180deg, #f7f9fc 0%, #f2f4f6 100%);
+}
+
+.card {
+  max-width: 640px;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: var(--shadow-md);
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 10px;
+}
+
+.text {
+  color: var(--text-sub);
+  font-size: 15px;
+}

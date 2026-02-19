@@ -1,0 +1,53 @@
+.section {
+    padding: 100px 0;
+    background-color: var(--surface-alt);
+}
+
+.container {
+    text-align: center;
+}
+
+.sectionTitle {
+    font-size: 36px;
+    font-weight: 800;
+    margin-bottom: 40px;
+    color: var(--text-main);
+}
+
+.highlight {
+    color: var(--primary);
+}
+
+.content {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.desc {
+    font-size: 18px;
+    color: var(--text-sub);
+    line-height: 1.6;
+    margin-bottom: 60px;
+}
+
+.disclaimerBox {
+    background: var(--surface);
+    padding: 32px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    text-align: left;
+}
+
+.disclaimerTitle {
+    display: block;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--text-sub);
+}
+
+.disclaimerText {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}

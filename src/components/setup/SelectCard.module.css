@@ -1,0 +1,76 @@
+.card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+    padding: 20px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: var(--shadow-sm);
+    text-align: left;
+    height: 100%;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.card:active {
+    transform: scale(0.98);
+}
+
+.selected {
+    border: 2px solid var(--primary);
+    background-color: var(--secondary);
+    color: var(--primary);
+}
+
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(1);
+}
+
+.label {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 4px;
+}
+
+.selected .label {
+    color: var(--primary);
+}
+
+.subLabel {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.selected .subLabel {
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.checkIcon {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 24px;
+    height: 24px;
+    color: var(--primary);
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.2s ease;
+}
+
+.selected .checkIcon {
+    opacity: 1;
+    transform: scale(1);
+}

@@ -1,0 +1,87 @@
+.footer {
+    background-color: var(--surface-alt);
+    padding: 80px 0 40px;
+    border-top: 1px solid var(--border);
+    margin-top: 120px;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 60px;
+}
+
+.top {
+    display: flex;
+    justify-content: space-between;
+}
+
+.brand {
+    max-width: 300px;
+}
+
+.logo {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 12px;
+}
+
+.desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.links {
+    display: flex;
+    gap: 60px;
+}
+
+.column h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 16px;
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.column a {
+    font-size: 14px;
+    color: var(--text-sub);
+    transition: color 0.2s;
+}
+
+.column a:hover {
+    color: var(--text-main);
+}
+
+.bottom {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.legal {
+    display: flex;
+    gap: 24px;
+}
+
+@media (max-width: 768px) {
+    .top {
+        flex-direction: column;
+        gap: 40px;
+    }
+
+    .links {
+        gap: 40px;
+    }
+}

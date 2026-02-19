@@ -1,0 +1,172 @@
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 20px 20px 80px;
+}
+
+.topBar {
+  margin-bottom: 12px;
+}
+
+.backLink {
+  font-size: 14px;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 18px;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.title {
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.tabRow {
+  display: inline-flex;
+  gap: 6px;
+  background: var(--surface-alt);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.tabBtn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-sub);
+  font-weight: 700;
+}
+
+.activeTab {
+  background: var(--surface);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+}
+
+.mineBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-alt);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.mineLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.mineText {
+  font-size: 13px;
+  color: var(--text-sub);
+  font-weight: 600;
+}
+
+.empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.tableWrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 72px 1fr 120px;
+  padding: 10px 12px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: 72px 1fr 120px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
+
+.highlighted {
+  background: #f7fbff;
+}
+
+.rank {
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.name {
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pnl {
+  font-size: 14px;
+  color: var(--text-sub);
+  font-weight: 700;
+  text-align: right;
+}
+
+.error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding-top: 16px;
+  }
+
+  .headerRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tableHeader,
+  .tableRow {
+    grid-template-columns: 56px 1fr 98px;
+    padding: 10px;
+  }
+}
