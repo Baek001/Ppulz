@@ -137,7 +137,18 @@ export default function DashboardClient() {
             const payload = await res.json().catch(() => ({}));
 
             if (res.ok && payload?.queued) {
-                setRefreshStatus('요청됨');
+                setRefreshStatus(payload?.immediate ? '완료' : '요청됨');
+                if (payload?.immediate) {
+                    const seriesRes = await fetch(
+                        `/api/dashboard/series?sub=${encodeURIComponent(activeTab)}`,
+                        { cache: 'no-store' },
+                    );
+                    if (seriesRes.ok) {
+                        const seriesPayload = await seriesRes.json();
+                        setSeries(seriesPayload.series || []);
+                        setSeriesMeta(seriesPayload.meta || { stale: false, lastAnalyzedAt: null, seedQueued: false });
+                    }
+                }
             } else if (payload?.reason === 'cooldown') {
                 setRefreshStatus('잠시 후 다시');
             } else if (payload?.reason === 'processing') {

@@ -28,7 +28,6 @@ export default function CategoryTabs({
                 ))}
             </div>
             <div className={styles.tabsActions}>
-                {stale ? <span className={styles.staleBadge}>데이터 오래됨</span> : null}
                 {refreshStatus ? <span className={styles.refreshBadge}>{refreshStatus}</span> : null}
                 <button
                     type='button'
