@@ -1,7 +1,6 @@
 ﻿import Link from 'next/link';
 import styles from './Hero.module.css';
 import buttonStyles from '../ui/Button.module.css';
-import Button from '../ui/Button';
 import DemoGraph from './DemoGraph';
 import { createClient } from '@/lib/supabase/server';
 
@@ -40,9 +39,6 @@ export default async function Hero() {
                         >
                             시작하기
                         </Link>
-                        <Button size="lg" variant="outline">
-                            데모
-                        </Button>
                     </div>
                 </div>
                 <div className={styles.visual}>

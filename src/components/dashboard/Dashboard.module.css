@@ -52,21 +52,28 @@
 }
 
 /* Tabs */
-.tabsContainer {
+.tabsBar {
     padding: 0 20px;
     border-bottom: 1px solid var(--border);
     margin-bottom: 24px;
-    overflow-x: auto;
-    white-space: nowrap;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
     position: sticky;
     top: var(--dashboard-header-height);
     z-index: 30;
     background-color: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-.tabsContainer::-webkit-scrollbar {
+.tabsScroller {
+    flex: 1;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.tabsScroller::-webkit-scrollbar {
     display: none;
 }
 
@@ -87,6 +94,58 @@
     color: var(--text-main);
     font-weight: 700;
     border-bottom-color: var(--text-main);
+}
+
+.tabsActions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.refreshBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    background-color: var(--surface-alt);
+    color: var(--text-main);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.refreshBtn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.refreshBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background-color: rgba(47, 130, 255, 0.12);
+    color: #2f82ff;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.staleBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background-color: rgba(255, 159, 67, 0.16);
+    color: #ff9f43;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 /* Graph Area */

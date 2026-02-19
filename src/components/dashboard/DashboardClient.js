@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import DashboardHeader from './DashboardHeader';
 import CategoryTabs from './CategoryTabs';
 import ScoreGraph from './ScoreGraph';
@@ -15,6 +15,10 @@ export default function DashboardClient() {
     const [series, setSeries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [seriesError, setSeriesError] = useState('');
+    const [seriesMeta, setSeriesMeta] = useState({ stale: false, lastAnalyzedAt: null, seedQueued: false });
+    const [refreshing, setRefreshing] = useState(false);
+    const [refreshStatus, setRefreshStatus] = useState('');
+    const refreshTimeoutRef = useRef(null);
 
     // 1. Fetch Tabs on mount
     useEffect(() => {
@@ -81,11 +85,16 @@ export default function DashboardClient() {
                 if (res.ok) {
                     const data = await res.json();
                     setSeries(data.series || []);
+                    setSeriesMeta(data.meta || { stale: false, lastAnalyzedAt: null, seedQueued: false });
+                    if (data?.meta?.seedQueued) {
+                        setRefreshStatus('요청됨');
+                    }
                     return;
                 }
                 const payload = await res.json().catch(() => ({}));
                 setSeries([]);
                 setSeriesError(payload.error || 'Failed to fetch series');
+                setSeriesMeta({ stale: false, lastAnalyzedAt: null, seedQueued: false });
             } catch (error) {
                 if (error?.name === 'AbortError') {
                     return;
@@ -93,6 +102,7 @@ export default function DashboardClient() {
                 console.error('Failed to fetch series', error);
                 setSeries([]);
                 setSeriesError('Failed to fetch series');
+                setSeriesMeta({ stale: false, lastAnalyzedAt: null, seedQueued: false });
             }
         }
 
@@ -102,6 +112,53 @@ export default function DashboardClient() {
             controller.abort();
         };
     }, [activeTab]);
+
+    useEffect(() => {
+        return () => {
+            if (refreshTimeoutRef.current) {
+                clearTimeout(refreshTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    async function handleRefresh() {
+        if (!activeTab || refreshing) return;
+        setRefreshing(true);
+        setRefreshStatus('');
+
+        try {
+            const res = await fetch('/api/dashboard/seed', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ subCategory: activeTab }),
+            });
+            const payload = await res.json().catch(() => ({}));
+
+            if (res.ok && payload?.queued) {
+                setRefreshStatus('요청됨');
+            } else if (payload?.reason === 'cooldown') {
+                setRefreshStatus('잠시 후 다시');
+            } else if (payload?.reason === 'processing') {
+                setRefreshStatus('처리 중');
+            } else {
+                setRefreshStatus('요청 실패');
+            }
+        } catch (error) {
+            console.error('Failed to queue refresh', error);
+            setRefreshStatus('요청 실패');
+        } finally {
+            setRefreshing(false);
+        }
+
+        if (refreshTimeoutRef.current) {
+            clearTimeout(refreshTimeoutRef.current);
+        }
+        refreshTimeoutRef.current = setTimeout(() => {
+            setRefreshStatus('');
+        }, 30000);
+    }
 
     // Get latest data point for the card
     const currentData = series.length > 0 ? series[series.length - 1] : null;
@@ -120,6 +177,11 @@ export default function DashboardClient() {
                 tabs={tabs}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
+                onRefresh={handleRefresh}
+                refreshing={refreshing}
+                refreshDisabled={!activeTab || refreshing}
+                refreshStatus={refreshStatus}
+                stale={seriesMeta?.stale}
             />
 
             <ScoreGraph data={series} />
