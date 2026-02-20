@@ -7,6 +7,8 @@ const ANALYSIS_COUNTRIES = ['mix', 'kr', 'us'];
 const ANALYSIS_LIMIT = 5;
 const MAX_SERIES_POINTS = 5;
 const QUEUE_COOLDOWN_MS = 10 * 60 * 1000;
+const CACHE_MAX_AGE_SECONDS = Math.max(5, parsePositiveInt(process.env.DASHBOARD_SERIES_CACHE_MAX_AGE, 30));
+const CACHE_STALE_SECONDS = Math.max(30, parsePositiveInt(process.env.DASHBOARD_SERIES_CACHE_STALE, 120));
 const queueInFlight = new Map();
 const recentQueueAt = new Map();
 
@@ -294,12 +296,19 @@ export async function GET(request) {
     seedQueued = await queueSeedRequest(subCategory, isStale ? 'stale' : 'insufficient');
   }
 
-  return NextResponse.json({
-    series,
-    meta: {
-      stale: isStale,
-      lastAnalyzedAt,
-      seedQueued,
+  return NextResponse.json(
+    {
+      series,
+      meta: {
+        stale: isStale,
+        lastAnalyzedAt,
+        seedQueued,
+      },
     },
-  });
+    {
+      headers: {
+        'Cache-Control': `private, max-age=${CACHE_MAX_AGE_SECONDS}, stale-while-revalidate=${CACHE_STALE_SECONDS}`,
+      },
+    },
+  );
 }
