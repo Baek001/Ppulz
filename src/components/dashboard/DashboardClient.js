@@ -8,6 +8,7 @@ import ScoreCard from './ScoreCard';
 import PredictionMarketSection from './PredictionMarketSection';
 import ReferenceSection from './ReferenceSection';
 import styles from './Dashboard.module.css';
+import { createClient as createBrowserClient } from '@/lib/supabase/client';
 
 const DEFAULT_META = {
   stale: false,
@@ -21,6 +22,7 @@ const DEFAULT_META = {
 function toStatusText(reason) {
   if (reason === 'done') return '완료';
   if (reason === 'immediate_done') return '완료';
+  if (reason === 'ephemeral') return '완료';
   if (reason === 'cooldown') return '잠시 후 다시';
   if (reason === 'processing') return '처리 중';
   if (reason === 'queued_retry') return '요청됨';
@@ -53,9 +55,34 @@ export default function DashboardClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState('');
   const refreshTimeoutRef = useRef(null);
+  const supabaseRef = useRef(null);
+
+  if (!supabaseRef.current) {
+    supabaseRef.current = createBrowserClient();
+  }
+
+  async function getAuthHeaders(extraHeaders = {}) {
+    try {
+      const {
+        data: { session },
+      } = await supabaseRef.current.auth.getSession();
+
+      if (session?.access_token) {
+        return {
+          ...extraHeaders,
+          Authorization: `Bearer ${session.access_token}`,
+        };
+      }
+    } catch (error) {
+      console.error('Failed to resolve auth session', error);
+    }
+
+    return extraHeaders;
+  }
 
   async function fetchSeriesForTab(tab, signal) {
-    const res = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(tab)}`, { signal });
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(tab)}`, { signal, headers });
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
       throw new Error(payload.error || 'Failed to fetch series');
@@ -66,7 +93,8 @@ export default function DashboardClient() {
   useEffect(() => {
     async function fetchTabs() {
       try {
-        const res = await fetch('/api/dashboard/tabs');
+        const headers = await getAuthHeaders();
+        const res = await fetch('/api/dashboard/tabs', { headers });
         if (res.ok) {
           const data = await res.json();
           setTabs(data.tabs || []);
@@ -118,7 +146,8 @@ export default function DashboardClient() {
 
   async function refreshBySeriesFallback() {
     try {
-      const res = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(activeTab)}&refresh=1`);
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(activeTab)}&refresh=1`, { headers });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         setRefreshStatus(payload.error || '요청 실패');
@@ -141,9 +170,10 @@ export default function DashboardClient() {
     setRefreshStatus('');
 
     try {
+      const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
       const res = await fetch('/api/dashboard/seed', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ subCategory: activeTab }),
       });
 

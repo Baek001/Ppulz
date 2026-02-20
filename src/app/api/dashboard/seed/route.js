@@ -3,10 +3,10 @@ export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
 import { normalizeSubCategory } from '@/lib/dashboard/category-normalize';
 import { runSeedPipeline } from '@/lib/dashboard/seed-pipeline';
+import { createRequestClient } from '@/lib/supabase/request';
 
 const requestSchema = z.object({
   subCategory: z.string().min(1),
@@ -62,7 +62,7 @@ async function updateSeedStatus(admin, subCategory, status, attempts, lastError 
   return upsertSeedStatus(admin, payload);
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
     if (!hasSupabaseAdminEnv()) {
       return NextResponse.json(
@@ -71,10 +71,7 @@ export async function GET() {
       );
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { user } = await createRequestClient(request);
 
     if (!user) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
@@ -98,10 +95,7 @@ export async function POST(request) {
       );
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { user } = await createRequestClient(request);
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

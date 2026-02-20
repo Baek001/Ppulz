@@ -2,10 +2,11 @@ export const runtime = 'edge';
 
 import { NextResponse } from 'next/server';
 
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
 import { getCategoryVariants, normalizeSubCategory } from '@/lib/dashboard/category-normalize';
-import { runSeedPipeline } from '@/lib/dashboard/seed-pipeline';
+import { collectSeedItems, runSeedPipeline } from '@/lib/dashboard/seed-pipeline';
+import { analyzeNews } from '@/lib/analysis/gemini';
+import { createRequestClient } from '@/lib/supabase/request';
 
 const ANALYSIS_COUNTRIES = ['mix', 'kr', 'us'];
 const ANALYSIS_LIMIT = 5;
@@ -152,6 +153,34 @@ async function fetchFallbackReferences(supabase, subCategoryVariants) {
 
 function getMinimumSeriesPoints() {
   return MIN_SERIES_POINTS;
+}
+
+function stripInternalFields(rows) {
+  return (rows || []).map(({ source_tier, ...rest }) => rest);
+}
+
+async function buildLiveFallbackPoint(supabase, subCategory) {
+  const collected = await collectSeedItems(supabase, subCategory);
+  if (!collected?.ok || !Array.isArray(collected.items) || collected.items.length === 0) {
+    return null;
+  }
+
+  const normalizedItems = stripInternalFields(collected.items);
+  const analysis = await analyzeNews(subCategory, normalizedItems, 'mix');
+  if (!analysis || analysis.error) {
+    return null;
+  }
+
+  return {
+    point: {
+      timestamp: new Date().toISOString(),
+      score: analysis.score,
+      label: analysis.label,
+      comment: `${analysis.comment || '실시간 분석 결과입니다.'} (임시 결과)`,
+      references: Array.isArray(analysis.references) ? analysis.references : [],
+    },
+    sourceTier: collected.sourceTier || null,
+  };
 }
 
 function cleanupOldQueueAttempts(nowMs) {
@@ -304,10 +333,7 @@ export async function GET(request) {
     subCategoryVariants.push(canonicalSubCategory);
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await createRequestClient(request);
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -370,12 +396,23 @@ export async function GET(request) {
     }
   }
 
+  let liveFallbackUsed = false;
+  let liveFallbackSourceTier = null;
+  if (series.length === 0) {
+    const liveFallback = await buildLiveFallbackPoint(supabase, canonicalSubCategory);
+    if (liveFallback?.point) {
+      series.push(liveFallback.point);
+      liveFallbackUsed = true;
+      liveFallbackSourceTier = liveFallback.sourceTier;
+    }
+  }
+
   const lastAnalyzedAt = series.length > 0 ? series[series.length - 1].timestamp : null;
   const lastAnalyzedMs = lastAnalyzedAt ? new Date(lastAnalyzedAt).getTime() : 0;
-  const isStale = !lastAnalyzedMs || Date.now() - lastAnalyzedMs > STALE_MS;
-  const insufficient = series.length < getMinimumSeriesPoints();
-  const shouldQueue = isStale || insufficient;
-  const queueReason = isStale ? 'stale' : insufficient ? 'insufficient' : 'fresh';
+  const isStale = liveFallbackUsed ? false : !lastAnalyzedMs || Date.now() - lastAnalyzedMs > STALE_MS;
+  const insufficient = liveFallbackUsed ? false : series.length < getMinimumSeriesPoints();
+  const shouldQueue = !liveFallbackUsed && (isStale || insufficient);
+  const queueReason = liveFallbackUsed ? 'live_fallback' : isStale ? 'stale' : insufficient ? 'insufficient' : 'fresh';
 
   let queueResult = { queued: false, status: null };
   if (forceRefresh) {
@@ -392,11 +429,17 @@ export async function GET(request) {
     queueResult = await queueSeedRequest(canonicalSubCategory, queueReason, { force: false });
   }
 
-  const sourceTier = pickSourceTier(series[series.length - 1]?.references) || immediateResult?.sourceTier || null;
+  const sourceTier =
+    pickSourceTier(series[series.length - 1]?.references) ||
+    liveFallbackSourceTier ||
+    immediateResult?.sourceTier ||
+    null;
   const seedReason = forceRefresh
     ? immediateResult?.ok
       ? 'immediate_done'
-      : immediateResult?.reason || 'manual_refresh'
+      : liveFallbackUsed
+        ? 'live_fallback'
+        : immediateResult?.reason || 'manual_refresh'
     : queueReason;
 
   return NextResponse.json(
@@ -407,7 +450,7 @@ export async function GET(request) {
         lastAnalyzedAt,
         seedQueued: Boolean(queueResult.queued),
         seedReason,
-        seedStatus: queueResult.status,
+        seedStatus: liveFallbackUsed ? 'ephemeral' : queueResult.status,
         sourceTier,
       },
     },
