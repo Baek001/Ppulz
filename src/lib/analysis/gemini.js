@@ -50,10 +50,12 @@ Rules:
 - comment: one concise Korean sentence under 70 chars
 - references: up to 4 news + up to 2 bills from given items only
 - reference fields: title, url, source_type(news|bill)
+- score must be evidence-based from provided items, not a fixed default value
+- avoid repeatedly returning the same neutral score unless evidence is truly identical
 
 Return strict JSON only:
 {
-  "score": 55,
+  "score": 50,
   "label": "mixed",
   "comment": "수요와 규제 이슈가 혼재되어 변동성이 큽니다.",
   "confidence": "low|medium|high",
@@ -211,6 +213,10 @@ function analyzeWithKeywordFallback(newsItems = []) {
   };
 }
 
+export function analyzeWithKeywordFallbackScore(newsItems = []) {
+  return analyzeWithKeywordFallback(newsItems);
+}
+
 async function analyzeWithOpenAI(subCategory, newsItems, country) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return { error: 'missing_openai_key' };
@@ -243,7 +249,10 @@ async function analyzeWithOpenAI(subCategory, newsItems, country) {
   const data = tryParseJson(content);
   if (!data) return { error: 'invalid_json_openai' };
 
-  return normalizeResult(subCategory, country, data, newsItems);
+  return {
+    ...normalizeResult(subCategory, country, data, newsItems),
+    provider: 'openai',
+  };
 }
 
 async function analyzeWithGemini(subCategory, newsItems, country) {
@@ -275,7 +284,10 @@ async function analyzeWithGemini(subCategory, newsItems, country) {
   const data = tryParseJson(text);
   if (!data) return { error: 'invalid_json_gemini' };
 
-  return normalizeResult(subCategory, country, data, newsItems);
+  return {
+    ...normalizeResult(subCategory, country, data, newsItems),
+    provider: 'gemini',
+  };
 }
 
 export async function analyzeNews(subCategory, newsItems, country = 'mix') {
@@ -295,11 +307,17 @@ export async function analyzeNews(subCategory, newsItems, country = 'mix') {
     }
 
     const fallbackData = analyzeWithKeywordFallback(newsItems);
-    return normalizeResult(subCategory, country, fallbackData, newsItems);
+    return {
+      ...normalizeResult(subCategory, country, fallbackData, newsItems),
+      provider: 'fallback_keyword',
+    };
   } catch (error) {
     console.error(`Analysis failed for ${subCategory}:`, error);
     const fallbackData = analyzeWithKeywordFallback(newsItems);
-    return normalizeResult(subCategory, country, fallbackData, newsItems);
+    return {
+      ...normalizeResult(subCategory, country, fallbackData, newsItems),
+      provider: 'fallback_keyword',
+    };
   }
 }
 

@@ -452,6 +452,10 @@ export async function GET(request) {
         seedReason,
         seedStatus: liveFallbackUsed ? 'ephemeral' : queueResult.status,
         sourceTier,
+        itemCount: Number.isFinite(immediateResult?.itemCount) ? immediateResult.itemCount : null,
+        analysisProvider: immediateResult?.analysisProvider || null,
+        qualityScore: Number.isFinite(immediateResult?.qualityScore) ? immediateResult.qualityScore : null,
+        scoreMode: immediateResult?.scoreMode || null,
       },
     },
     {

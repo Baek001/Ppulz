@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
+import { ensureOpenMarketsForSubCategories } from '@/lib/markets/open';
 import {
   ensureWalletRow,
   extractSubCategories,
@@ -17,6 +18,22 @@ import {
 
 const MARKET_SCHEMA_MISSING_MESSAGE =
   '?덉륫 留덉폆 ?뚯씠釉붿씠 ?놁뒿?덈떎. Supabase 留덉씠洹몃젅?댁뀡 20260219_prediction_market.sql???ㅽ뻾?댁＜?몄슂.';
+const MARKET_SELECT_COLUMNS =
+  'id, market_key, sub_category, title, description, status, open_at, lock_at, resolve_at, baseline_score, resolved_score, outcome, resolve_rule';
+
+function hasActiveStatus(statusFilter) {
+  return statusFilter.includes('open') || statusFilter.includes('locked');
+}
+
+async function loadMarkets(dbClient, subCategories, statusFilter) {
+  return dbClient
+    .from('prediction_markets')
+    .select(MARKET_SELECT_COLUMNS)
+    .in('sub_category', subCategories)
+    .in('status', statusFilter)
+    .order('resolve_at', { ascending: false })
+    .limit(30);
+}
 
 export async function GET(request) {
   const supabase = await createClient();
@@ -59,21 +76,41 @@ export async function GET(request) {
   const useAdmin = hasSupabaseAdminEnv();
   const dbClient = useAdmin ? createAdminClient() : supabase;
 
-  const { data: markets, error: marketsError } = await dbClient
-    .from('prediction_markets')
-    .select(
-      'id, market_key, sub_category, title, description, status, open_at, lock_at, resolve_at, baseline_score, resolved_score, outcome, resolve_rule',
-    )
-    .in('sub_category', targetSubCategories)
-    .in('status', statusFilter)
-    .order('resolve_at', { ascending: false })
-    .limit(30);
-
+  let { data: markets, error: marketsError } = await loadMarkets(
+    dbClient,
+    targetSubCategories,
+    statusFilter,
+  );
   if (marketsError) {
     if (isMarketSchemaMissingError(marketsError)) {
       return NextResponse.json({ error: MARKET_SCHEMA_MISSING_MESSAGE }, { status: 503 });
     }
     return NextResponse.json({ error: marketsError.message }, { status: 500 });
+  }
+
+  if (useAdmin && hasActiveStatus(statusFilter)) {
+    const existingSubSet = new Set((markets || []).map((item) => item.sub_category));
+    const missingSubCategories = targetSubCategories.filter((subCategory) => !existingSubSet.has(subCategory));
+
+    if (missingSubCategories.length > 0) {
+      try {
+        await ensureOpenMarketsForSubCategories(dbClient, missingSubCategories);
+        ({ data: markets, error: marketsError } = await loadMarkets(
+          dbClient,
+          targetSubCategories,
+          statusFilter,
+        ));
+      } catch (openError) {
+        return NextResponse.json({ error: openError.message }, { status: 500 });
+      }
+
+      if (marketsError) {
+        if (isMarketSchemaMissingError(marketsError)) {
+          return NextResponse.json({ error: MARKET_SCHEMA_MISSING_MESSAGE }, { status: 503 });
+        }
+        return NextResponse.json({ error: marketsError.message }, { status: 500 });
+      }
+    }
   }
 
   let walletBalance = 0;

@@ -9,6 +9,11 @@ function parsePositiveInt(value, fallbackValue) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackValue;
 }
 
+function parseOptionalPositiveInt(value) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function getStakePoints() {
   return parsePositiveInt(process.env.MARKET_STAKE_POINTS, 100);
 }
@@ -17,8 +22,32 @@ export function getWalletSeedPoints() {
   return parsePositiveInt(process.env.MARKET_WALLET_SEED, 1000);
 }
 
+export function getMarketCooldownHours() {
+  const explicit = parseOptionalPositiveInt(process.env.MARKET_COOLDOWN_HOURS);
+  return explicit ?? 1;
+}
+
+export function getMarketVotingHours() {
+  const explicit = parseOptionalPositiveInt(process.env.MARKET_VOTING_HOURS);
+  if (explicit !== null) {
+    return explicit;
+  }
+
+  const legacyWindowHours = parseOptionalPositiveInt(process.env.MARKET_WINDOW_HOURS);
+  if (legacyWindowHours !== null) {
+    return Math.max(1, legacyWindowHours - getMarketCooldownHours());
+  }
+
+  return 23;
+}
+
+export function getMarketCycleHours() {
+  return getMarketVotingHours() + getMarketCooldownHours();
+}
+
+// Legacy alias: historical code and env used MARKET_WINDOW_HOURS as total cycle.
 export function getMarketWindowHours() {
-  return parsePositiveInt(process.env.MARKET_WINDOW_HOURS, 24);
+  return getMarketCycleHours();
 }
 
 export function normalizeSide(side) {
@@ -70,7 +99,7 @@ export function toMarketKey(subCategory, date = new Date()) {
   return `${subCategory}:${hourKey}`;
 }
 
-export function buildMarketTitle(subCategory, windowHours = getMarketWindowHours()) {
+export function buildMarketTitle(subCategory, windowHours = getMarketVotingHours()) {
   return `${subCategory} 점수 ${windowHours}시간 후 상승할까요?`;
 }
 

@@ -1,6 +1,6 @@
 import { SEARCH_QUERIES } from '@/lib/constants/search_queries';
 import { fetchNews } from '@/lib/ingest/news';
-import { analyzeNews } from '@/lib/analysis/gemini';
+import { analyzeNews, analyzeWithKeywordFallbackScore } from '@/lib/analysis/gemini';
 import {
   getCategoryVariants,
   getSiblingSubCategories,
@@ -12,11 +12,25 @@ function parsePositiveInt(value, fallbackValue) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackValue;
 }
 
+function parseRatio(value, fallbackValue) {
+  const parsed = Number.parseFloat(value ?? '');
+  if (!Number.isFinite(parsed)) return fallbackValue;
+  return Math.max(0, Math.min(1, parsed));
+}
+
 const MIN_ITEMS_FOR_ANALYSIS = parsePositiveInt(process.env.DASHBOARD_MIN_ITEMS_FOR_ANALYSIS, 8);
 const MAX_ITEMS_FOR_ANALYSIS = parsePositiveInt(process.env.DASHBOARD_MAX_ITEMS_FOR_ANALYSIS, 16);
 const RELATED_SUB_LIMIT = parsePositiveInt(process.env.DASHBOARD_RELATED_SUB_LIMIT, 2);
 const GRAPH_MIN_POINTS = parsePositiveInt(process.env.DASHBOARD_MIN_POINTS, 3);
 const MAX_QUERY_STEPS = parsePositiveInt(process.env.DASHBOARD_MAX_QUERY_STEPS, 4);
+const ANALYSIS_MAX_ITEM_AGE_HOURS = parsePositiveInt(process.env.DASHBOARD_ANALYSIS_MAX_ITEM_AGE_HOURS, 72);
+
+const SOURCE_TIER_WEIGHTS = Object.freeze({
+  category: parseRatio(process.env.DASHBOARD_TIER_WEIGHT_CATEGORY, 1),
+  related: parseRatio(process.env.DASHBOARD_TIER_WEIGHT_RELATED, 0.75),
+  global: parseRatio(process.env.DASHBOARD_TIER_WEIGHT_GLOBAL, 0.55),
+  db: parseRatio(process.env.DASHBOARD_TIER_WEIGHT_DB, 0.45),
+});
 
 const GLOBAL_KR_NEWS_QUERIES = ['한국 경제 뉴스', '한국 정책 뉴스', '한국 산업 뉴스'];
 const GLOBAL_US_NEWS_QUERIES = ['US economy news', 'US policy news', 'US market news'];
@@ -191,6 +205,150 @@ function sortByPublishedDesc(rows) {
   });
 }
 
+function getPublishedMs(value) {
+  const parsed = new Date(value || 0).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getDomainFromUrl(value) {
+  try {
+    return new URL(value).hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function normalizeTitleKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .trim();
+}
+
+function filterRecentRows(rows, maxAgeHours) {
+  const thresholdMs = Date.now() - Math.max(1, maxAgeHours) * 60 * 60 * 1000;
+  const recentRows = (rows || []).filter((row) => getPublishedMs(row?.published_at) >= thresholdMs);
+  return recentRows.length > 0 ? recentRows : rows || [];
+}
+
+function dedupeRowsForAnalysis(rows) {
+  const seenByUrl = new Set();
+  const seenByTitleDomain = new Set();
+  const deduped = [];
+
+  for (const row of rows || []) {
+    if (!row?.title || !row?.url) continue;
+
+    const urlKey = String(row.url);
+    if (seenByUrl.has(urlKey)) continue;
+    seenByUrl.add(urlKey);
+
+    const titleKey = normalizeTitleKey(row.title);
+    const domain = getDomainFromUrl(row.url);
+    const titleDomainKey = `${row.source_type || 'news'}::${domain}::${titleKey}`;
+    if (seenByTitleDomain.has(titleDomainKey)) continue;
+    seenByTitleDomain.add(titleDomainKey);
+
+    deduped.push(row);
+  }
+
+  return deduped;
+}
+
+function selectBalancedRows(rows, limit) {
+  const newsRows = [];
+  const billRows = [];
+
+  for (const row of rows || []) {
+    if (row?.source_type === 'bill') {
+      billRows.push(row);
+    } else {
+      newsRows.push(row);
+    }
+  }
+
+  const selected = [];
+  const maxItems = Math.max(1, limit);
+
+  if (billRows.length > 0 && selected.length < maxItems) {
+    selected.push(billRows.shift());
+  }
+
+  const minNewsToInclude = Math.min(2, newsRows.length);
+  for (let i = 0; i < minNewsToInclude && selected.length < maxItems; i += 1) {
+    selected.push(newsRows.shift());
+  }
+
+  const rest = [...newsRows, ...billRows].sort(
+    (a, b) => getPublishedMs(b?.published_at) - getPublishedMs(a?.published_at),
+  );
+
+  for (const row of rest) {
+    if (selected.length >= maxItems) break;
+    selected.push(row);
+  }
+
+  return selected;
+}
+
+function prepareRowsForAnalysis(rows) {
+  const sorted = sortByPublishedDesc(rows || []);
+  const recent = filterRecentRows(sorted, ANALYSIS_MAX_ITEM_AGE_HOURS);
+  const deduped = dedupeRowsForAnalysis(recent);
+  const selected = selectBalancedRows(deduped, MAX_ITEMS_FOR_ANALYSIS);
+  return selected;
+}
+
+function clampScore(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 50;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function getSourceTierWeight(sourceTier) {
+  if (!sourceTier) return SOURCE_TIER_WEIGHTS.related;
+  return SOURCE_TIER_WEIGHTS[sourceTier] ?? SOURCE_TIER_WEIGHTS.related;
+}
+
+function blendScoreWithSourceTier(modelScore, fallbackScore, sourceTier, itemCount) {
+  const safeModelScore = clampScore(modelScore);
+  const safeFallbackScore = clampScore(fallbackScore);
+
+  if (safeModelScore === safeFallbackScore) {
+    return {
+      score: safeModelScore,
+      scoreMode: 'direct',
+      weight: 1,
+    };
+  }
+
+  const coverageRatio = Math.max(0.25, Math.min(1, (Number(itemCount) || 0) / MIN_ITEMS_FOR_ANALYSIS));
+  const tierWeight = getSourceTierWeight(sourceTier);
+  let effectiveWeight = Math.max(0.2, Math.min(1, tierWeight * coverageRatio));
+
+  // If model keeps staying around neutral while fallback has stronger directional signal,
+  // lower model weight to avoid sticky 55-like plateaus.
+  if (Math.abs(safeModelScore - 55) <= 1 && Math.abs(safeModelScore - safeFallbackScore) >= 3) {
+    effectiveWeight = Math.min(effectiveWeight, 0.45);
+  }
+
+  const blended = clampScore(safeModelScore * effectiveWeight + safeFallbackScore * (1 - effectiveWeight));
+  return {
+    score: blended,
+    scoreMode: 'blended',
+    weight: effectiveWeight,
+  };
+}
+
+function computeQualityScore(sourceTier, itemCount, rows) {
+  const tierWeight = getSourceTierWeight(sourceTier);
+  const coverage = Math.max(0, Math.min(1, (Number(itemCount) || 0) / MIN_ITEMS_FOR_ANALYSIS));
+  const domains = new Set((rows || []).map((row) => getDomainFromUrl(row?.url)).filter(Boolean));
+  const domainDiversity = Math.max(0, Math.min(1, domains.size / 4));
+  return Number((tierWeight * 0.5 + coverage * 0.3 + domainDiversity * 0.2).toFixed(3));
+}
+
 function attachReferenceSourceTier(references, rowsByUrl) {
   if (!Array.isArray(references)) return [];
   return references.map((item) => {
@@ -210,7 +368,7 @@ function isMissingColumnError(error, columnName) {
   return String(error.message || '').toLowerCase().includes(columnName.toLowerCase());
 }
 
-async function ensureMinimumGraphPoints(admin, subCategory, latestRow, minimumPoints) {
+async function ensureMinimumGraphPoints(admin, subCategory, latestRow, minimumPoints, options = {}) {
   const { data: existingRows } = await admin
     .from('hourly_analysis')
     .select('id, analyzed_at')
@@ -222,12 +380,19 @@ async function ensureMinimumGraphPoints(admin, subCategory, latestRow, minimumPo
   const currentCount = (existingRows || []).length;
   if (currentCount >= minimumPoints) return;
 
+  const sourceTier = options.sourceTier || 'category';
+  const allowBackfill = sourceTier === 'category' || currentCount === 0;
+  if (!allowBackfill) return;
+
   const missing = minimumPoints - currentCount;
   const inserts = [];
+  const baseScore = clampScore(latestRow?.score);
   for (let i = missing; i >= 1; i -= 1) {
+    const syntheticScore = clampScore(baseScore + (i % 2 === 0 ? -1 : 1));
     inserts.push({
       ...latestRow,
       analyzed_at: new Date(Date.now() - i * 60 * 60 * 1000).toISOString(),
+      score: syntheticScore,
     });
   }
 
@@ -315,7 +480,16 @@ export async function runSeedPipeline(admin, subCategory, options = {}) {
   }
 
   const canonicalSubCategory = collected.canonicalSubCategory;
-  const rows = sortByPublishedDesc(collected.items).slice(0, MAX_ITEMS_FOR_ANALYSIS);
+  const rows = prepareRowsForAnalysis(collected.items);
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      reason: 'no_usable_items',
+      canonicalSubCategory,
+      sourceTier: collected.sourceTier,
+      itemCount: 0,
+    };
+  }
   const rowsByUrl = new Map(rows.map((row) => [row.url, row]));
   const dbRows = stripInternalFields(rows);
 
@@ -344,6 +518,16 @@ export async function runSeedPipeline(admin, subCategory, options = {}) {
     };
   }
 
+  const fallbackAnalysis = analyzeWithKeywordFallbackScore(dbRows);
+  const blended = blendScoreWithSourceTier(
+    analysisResult.score,
+    fallbackAnalysis?.score,
+    collected.sourceTier,
+    rows.length,
+  );
+  const finalScore = blended.score;
+  const qualityScore = computeQualityScore(collected.sourceTier, rows.length, rows);
+
   const referencesWithTier = attachReferenceSourceTier(analysisResult.references, rowsByUrl);
   const baseComment = analysisResult.comment || '';
   const comment =
@@ -354,7 +538,7 @@ export async function runSeedPipeline(admin, subCategory, options = {}) {
   const payload = {
     country: 'mix',
     sub_category: canonicalSubCategory,
-    score: analysisResult.score,
+    score: finalScore,
     label: analysisResult.label,
     comment,
     references: referencesWithTier,
@@ -376,7 +560,10 @@ export async function runSeedPipeline(admin, subCategory, options = {}) {
     };
   }
 
-  await ensureMinimumGraphPoints(admin, canonicalSubCategory, payload, minGraphPoints);
+  await ensureMinimumGraphPoints(admin, canonicalSubCategory, payload, minGraphPoints, {
+    sourceTier: collected.sourceTier,
+    scoreMode: blended.scoreMode,
+  });
 
   return {
     ok: true,
@@ -386,5 +573,8 @@ export async function runSeedPipeline(admin, subCategory, options = {}) {
     itemCount: rows.length,
     score: payload.score,
     label: payload.label,
+    scoreMode: blended.scoreMode,
+    qualityScore,
+    analysisProvider: analysisResult.provider || 'unknown',
   };
 }

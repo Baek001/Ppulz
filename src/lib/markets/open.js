@@ -1,7 +1,9 @@
 ﻿import {
   buildMarketTitle,
   getLatestCategoryScore,
-  getMarketWindowHours,
+  getMarketCooldownHours,
+  getMarketCycleHours,
+  getMarketVotingHours,
   toMarketKey,
 } from '@/lib/markets/server';
 
@@ -19,8 +21,11 @@ export async function ensureOpenMarketsForSubCategories(
   }
 
   const nowIso = now.toISOString();
-  const windowHours = getMarketWindowHours();
-  const resolveAtIso = new Date(now.getTime() + windowHours * 60 * 60 * 1000).toISOString();
+  const votingHours = getMarketVotingHours();
+  const cooldownHours = getMarketCooldownHours();
+  const cycleHours = getMarketCycleHours();
+  const lockAtIso = new Date(now.getTime() + votingHours * 60 * 60 * 1000).toISOString();
+  const resolveAtIso = new Date(now.getTime() + cycleHours * 60 * 60 * 1000).toISOString();
 
   const { data: activeRows, error: activeError } = await admin
     .from('prediction_markets')
@@ -50,17 +55,20 @@ export async function ensureOpenMarketsForSubCategories(
         {
           market_key: marketKey,
           sub_category: subCategory,
-          title: buildMarketTitle(subCategory, windowHours),
+          title: buildMarketTitle(subCategory, votingHours),
           description: 'Ppulz ?대? ?먯닔 蹂?붾? 湲곗??쇰줈 ?먮룞 ?뺤궛?⑸땲??',
           status: 'open',
           resolve_rule: {
             metric: 'ppulse_score',
-            window_hours: windowHours,
+            voting_hours: votingHours,
+            cooldown_hours: cooldownHours,
+            cycle_hours: cycleHours,
+            window_hours: cycleHours,
             threshold: 0,
             mode: 'delta',
           },
           open_at: nowIso,
-          lock_at: resolveAtIso,
+          lock_at: lockAtIso,
           resolve_at: resolveAtIso,
           baseline_score: baselineScore,
         },
