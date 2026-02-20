@@ -8,14 +8,13 @@ function getScoreColorClass(score) {
     return styles.scoreRed; // Negative
 }
 
-function sourceTierText(sourceTier) {
-    if (sourceTier === 'related') return '보강 데이터(유사 카테고리)';
-    if (sourceTier === 'global') return '보강 데이터(공통 이슈)';
-    if (sourceTier === 'db') return '보강 데이터(최근 아카이브)';
-    return '';
+function sourceTierText(sourceTier, activeCategory) {
+    if (!sourceTier || sourceTier === 'category') return '';
+    const categoryLabel = activeCategory || '선택 카테고리';
+    return `보강 데이터(${categoryLabel})`;
 }
 
-export default function ScoreCard({ current, sourceTier }) {
+export default function ScoreCard({ current, sourceTier, activeCategory }) {
     if (!current) {
         return (
             <div className={styles.scoreCard}>
@@ -40,7 +39,7 @@ export default function ScoreCard({ current, sourceTier }) {
             </p>
             {sourceTier && sourceTier !== 'category' ? (
                 <p style={{ marginTop: '8px', fontSize: '12px', color: '#8b95a1' }}>
-                    {sourceTierText(sourceTier)}
+                    {sourceTierText(sourceTier, activeCategory)}
                 </p>
             ) : null}
         </div>

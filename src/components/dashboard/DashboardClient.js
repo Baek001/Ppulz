@@ -230,7 +230,7 @@ export default function DashboardClient() {
       />
 
       <ScoreGraph data={series} />
-      <ScoreCard current={currentData} sourceTier={seriesMeta?.sourceTier} />
+      <ScoreCard current={currentData} sourceTier={seriesMeta?.sourceTier} activeCategory={activeTab} />
       <PredictionMarketSection activeTab={activeTab} />
       <ReferenceSection references={currentData?.references} />
 

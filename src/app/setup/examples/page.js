@@ -79,7 +79,7 @@ export default async function ExamplesPage({ searchParams }) {
 
   const initialChecked = sanitizeCheckedCardIds(onboarding.example_checked, selectedCards);
 
-  return <ExamplesStep cards={selectedCards} initialChecked={initialChecked} />;
+  return <ExamplesStep cards={selectedCards} initialChecked={initialChecked} editMode={editMode} />;
 }
 
 

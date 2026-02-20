@@ -17,7 +17,7 @@ const gridStyle = {
   width: '100%',
 };
 
-export default function ExamplesStep({ cards, initialChecked }) {
+export default function ExamplesStep({ cards, initialChecked, editMode = false }) {
   const router = useRouter();
   const validInitialChecked = useMemo(() => {
     const validIdSet = new Set(cards.map((card) => card.card_id));
@@ -73,6 +73,11 @@ export default function ExamplesStep({ cards, initialChecked }) {
     }
   }
 
+  function handleBack() {
+    const prevPath = editMode ? '/setup/subcategories?edit=1' : '/setup/subcategories';
+    router.push(prevPath);
+  }
+
   return (
     <SetupLayout
       step={3}
@@ -97,6 +102,11 @@ export default function ExamplesStep({ cards, initialChecked }) {
         </>
       }
     >
+      <div style={{ marginBottom: '16px' }}>
+        <Button variant='outline' size='sm' onClick={handleBack}>
+          뒤로가기
+        </Button>
+      </div>
       <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>
         예시 뉴스와 예시 법안이 함께 포함된 12장을 제공합니다.
       </p>
@@ -117,4 +127,3 @@ export default function ExamplesStep({ cards, initialChecked }) {
     </SetupLayout>
   );
 }
-

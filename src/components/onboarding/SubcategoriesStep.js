@@ -170,6 +170,11 @@ export default function SubcategoriesStep({
     }
   }
 
+  function handleBack() {
+    const prevPath = editMode ? '/setup/categories?edit=1' : '/setup/categories';
+    router.push(prevPath);
+  }
+
   const currentSubCategories = getSubCategoriesForBigCategory(activeTab);
 
   return (
@@ -192,6 +197,11 @@ export default function SubcategoriesStep({
         </>
       }
     >
+      <div style={{ marginBottom: '16px' }}>
+        <Button variant='outline' size='sm' onClick={handleBack}>
+          뒤로가기
+        </Button>
+      </div>
       <div className={styles.tabsScroll}>
         {bigCategories.map((bigCategory) => {
           const count = selectedByBig[bigCategory]?.length ?? 0;

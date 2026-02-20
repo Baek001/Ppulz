@@ -75,6 +75,11 @@ export default function CategoriesStep({ initialSelected = [], editMode = false 
     }
   }
 
+  function handleBack() {
+    const prevPath = editMode ? '/dashboard' : '/signup';
+    router.push(prevPath);
+  }
+
   return (
     <SetupLayout
       step={1}
@@ -99,6 +104,11 @@ export default function CategoriesStep({ initialSelected = [], editMode = false 
         </>
       }
     >
+      <div style={{ marginBottom: '16px' }}>
+        <Button variant='outline' size='sm' onClick={handleBack}>
+          뒤로가기
+        </Button>
+      </div>
       <div style={gridStyle}>
         {BIG_CATEGORIES.map((bigCategory) => (
           <SelectCard
