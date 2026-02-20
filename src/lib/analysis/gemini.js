@@ -1,8 +1,23 @@
-﻿
+const OpenAIModule = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_KEY);
+const OpenAI = OpenAIModule?.default || OpenAIModule;
+
+function getOpenAIClient() {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        return null;
+    }
+    return new OpenAI({ apiKey });
+}
+
+function getGeminiClient() {
+    const apiKey = process.env.GOOGLE_GEMINI_KEY;
+    if (!apiKey) {
+        return null;
+    }
+    return new GoogleGenerativeAI(apiKey);
+}
 
 function tryParseJson(text) {
     if (!text || typeof text !== 'string') return null;
@@ -37,14 +52,9 @@ function tryParseJson(text) {
     return null;
 }
 
-export async function analyzeNews(subCategory, newsItems, country = 'kr') {
-    if (!newsItems || newsItems.length === 0) {
-        return null;
-    }
-
-    const newsSummary = newsItems.map(item => `- ${item.title}: ${item.snippet}`).join('\n');
-
-    const prompt = `
+function buildPrompt(subCategory, newsItems) {
+    const newsSummary = newsItems.map((item) => `- ${item.title}: ${item.snippet}`).join('\n');
+    return `
 너는 Ppulz의 분석가다. 아래 뉴스/법안 목록을 보고 "${subCategory}"의 전반 분위기를 평가해라.
 
 데이터:
@@ -68,43 +78,90 @@ ${newsSummary}
   ]
 }
 `;
-
-    try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-        const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-        });
-
-        const response = await result.response;
-        const text = response.text();
-
-        const data = tryParseJson(text);
-
-        if (!data || typeof data !== 'object') {
-            return { error: 'INVALID_JSON' };
-        }
-
-        // Ensure references exist
-        if (!data.references) data.references = [];
-
-        return {
-            sub_category: subCategory,
-            country,
-            analyzed_at: new Date().toISOString(),
-            score: data.score,
-            label: data.label,
-            comment: data.comment,
-            confidence: data.confidence,
-            references: data.references,
-        };
-    } catch (error) {
-        console.error(`Gemini analysis failed for ${subCategory}:`, error);
-        let errorMsg = error.message;
-        if (error.response) {
-            errorMsg += ' Raw: ' + await error.response.text();
-        }
-        return { error: errorMsg };
-    }
 }
 
+async function analyzeWithOpenAI(subCategory, newsItems) {
+    const openai = getOpenAIClient();
+    if (!openai) return { error: 'missing_openai_key' };
+
+    const prompt = buildPrompt(subCategory, newsItems);
+
+    const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+            { role: 'system', content: 'JSON만 출력하세요.' },
+            { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+    });
+
+    const content = response.choices?.[0]?.message?.content || '';
+    const data = tryParseJson(content);
+    if (!data) {
+        return { error: 'INVALID_JSON' };
+    }
+
+    if (!data.references) data.references = [];
+    return {
+        sub_category: subCategory,
+        country: 'mix',
+        analyzed_at: new Date().toISOString(),
+        score: data.score,
+        label: data.label,
+        comment: data.comment,
+        confidence: data.confidence,
+        references: data.references,
+    };
+}
+
+async function analyzeWithGemini(subCategory, newsItems) {
+    const genAI = getGeminiClient();
+    if (!genAI) return { error: 'missing_gemini_key' };
+
+    const prompt = buildPrompt(subCategory, newsItems);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+    const response = await result.response;
+    const text = response.text();
+    const data = tryParseJson(text);
+    if (!data) {
+        return { error: 'INVALID_JSON' };
+    }
+
+    if (!data.references) data.references = [];
+    return {
+        sub_category: subCategory,
+        country: 'mix',
+        analyzed_at: new Date().toISOString(),
+        score: data.score,
+        label: data.label,
+        comment: data.comment,
+        confidence: data.confidence,
+        references: data.references,
+    };
+}
+
+export async function analyzeNews(subCategory, newsItems, country = 'kr') {
+    if (!newsItems || newsItems.length === 0) {
+        return null;
+    }
+
+    try {
+        const openaiResult = await analyzeWithOpenAI(subCategory, newsItems);
+        if (openaiResult && !openaiResult.error) {
+            return openaiResult;
+        }
+
+        const geminiResult = await analyzeWithGemini(subCategory, newsItems);
+        if (geminiResult && !geminiResult.error) {
+            return geminiResult;
+        }
+
+        return { error: openaiResult?.error || geminiResult?.error || 'analysis_failed' };
+    } catch (error) {
+        console.error(`Analysis failed for ${subCategory}:`, error);
+        return { error: error?.message || 'analysis_failed' };
+    }
+}

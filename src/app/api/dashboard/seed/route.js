@@ -135,6 +135,11 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Admin env not configured.' }, { status: 503 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const token = searchParams.get('token');
+    const cronSecret = process.env.CRON_SECRET;
+    const tokenAuthorized = cronSecret && token && token === cronSecret;
+
     if (!process.env.GOOGLE_GEMINI_KEY) {
       return NextResponse.json({ queued: false, reason: 'missing_key' });
     }
@@ -144,7 +149,7 @@ export async function POST(request) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    if (!user && !tokenAuthorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
