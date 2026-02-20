@@ -81,6 +81,57 @@ Return strict JSON only:
 `;
 }
 
+function analyzeWithKeywordFallback(newsItems) {
+  const positiveWords = [
+    '상승', '호재', '증가', '개선', '확대', '승인', '통과', '완화',
+    'rise', 'up', 'increase', 'improve', 'approve', 'pass',
+  ];
+  const negativeWords = [
+    '하락', '악재', '감소', '지연', '위험', '규제', '제재', '중단', '리콜',
+    'fall', 'down', 'decrease', 'delay', 'risk', 'regulation', 'sanction', 'recall',
+  ];
+
+  let positive = 0;
+  let negative = 0;
+
+  for (const item of newsItems || []) {
+    const text = `${item?.title || ''} ${item?.snippet || ''}`.toLowerCase();
+    for (const word of positiveWords) {
+      if (text.includes(word.toLowerCase())) positive += 1;
+    }
+    for (const word of negativeWords) {
+      if (text.includes(word.toLowerCase())) negative += 1;
+    }
+  }
+
+  const diff = positive - negative;
+  const rawScore = 50 + diff * 4;
+  const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+
+  let label = '혼합';
+  if (score >= 65) label = '기회';
+  if (score <= 35) label = '위험';
+
+  let comment = '핵심 이슈가 혼재되어 변동성에 유의해야 합니다.';
+  if (label === '기회') comment = '긍정 신호가 우세하지만 과열 여부를 함께 확인하세요.';
+  if (label === '위험') comment = '부정 신호가 우세해 보수적으로 접근할 필요가 있습니다.';
+
+  return {
+    score,
+    label,
+    comment,
+    confidence: 'low',
+    references: (newsItems || [])
+      .filter((item) => item?.title && item?.url && item?.source_type)
+      .slice(0, 4)
+      .map((item) => ({
+        title: item.title,
+        url: item.url,
+        source_type: item.source_type,
+      })),
+  };
+}
+
 function normalizeResult(subCategory, country, data) {
   const scoreNum = Number(data?.score);
   const score = Number.isFinite(scoreNum) ? Math.max(0, Math.min(100, Math.round(scoreNum))) : 50;
@@ -167,9 +218,11 @@ export async function analyzeNews(subCategory, newsItems, country = 'mix') {
       return geminiResult;
     }
 
-    return { error: openaiResult?.error || geminiResult?.error || 'analysis_failed' };
+    const fallbackData = analyzeWithKeywordFallback(newsItems);
+    return normalizeResult(subCategory, country, fallbackData);
   } catch (error) {
     console.error(`Analysis failed for ${subCategory}:`, error);
-    return { error: error?.message || 'analysis_failed' };
+    const fallbackData = analyzeWithKeywordFallback(newsItems);
+    return normalizeResult(subCategory, country, fallbackData);
   }
 }

@@ -140,12 +140,6 @@ export async function POST(request) {
     const cronSecret = process.env.CRON_SECRET;
     const tokenAuthorized = cronSecret && token && token === cronSecret;
 
-    const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
-    const hasGeminiKey = !!process.env.GOOGLE_GEMINI_KEY;
-    if (!hasOpenAIKey && !hasGeminiKey) {
-      return NextResponse.json({ queued: false, reason: 'missing_key' });
-    }
-
     const supabase = await createClient();
     const {
       data: { user },
