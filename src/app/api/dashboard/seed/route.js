@@ -62,6 +62,33 @@ async function updateSeedStatus(admin, subCategory, status, attempts, lastError 
   return upsertSeedStatus(admin, payload);
 }
 
+export async function GET() {
+  try {
+    if (!hasSupabaseAdminEnv()) {
+      return NextResponse.json(
+        { ok: false, error: 'Admin env not configured.', reason: 'missing_admin_env' },
+        { status: 503 },
+      );
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    return NextResponse.json({ ok: true, route: 'seed', version: 2 });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error?.message ?? 'Seed route check failed.' },
+      { status: 500 },
+    );
+  }
+}
+
 export async function POST(request) {
   try {
     if (!hasSupabaseAdminEnv()) {

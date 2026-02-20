@@ -19,6 +19,8 @@ const DEFAULT_META = {
 };
 
 function toStatusText(reason) {
+  if (reason === 'done') return '완료';
+  if (reason === 'immediate_done') return '완료';
   if (reason === 'cooldown') return '잠시 후 다시';
   if (reason === 'processing') return '처리 중';
   if (reason === 'queued_retry') return '요청됨';
@@ -28,6 +30,7 @@ function toStatusText(reason) {
   if (reason === 'insufficient') return '요청됨';
   if (reason === 'queue_unavailable') return '큐 미설정';
   if (reason === 'queue_failed') return '요청 실패';
+  if (reason === 'failed') return '요청 실패';
   if (reason === 'done_no_data') return '데이터 부족';
   if (reason === 'no_items') return '자료 없음';
   return '요청 실패';

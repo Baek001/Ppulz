@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
 import { getCategoryVariants, normalizeSubCategory } from '@/lib/dashboard/category-normalize';
+import { runSeedPipeline } from '@/lib/dashboard/seed-pipeline';
 
 const ANALYSIS_COUNTRIES = ['mix', 'kr', 'us'];
 const ANALYSIS_LIMIT = 5;
@@ -328,6 +329,20 @@ export async function GET(request) {
     });
   }
 
+  let immediateResult = null;
+  if (forceRefresh && hasSupabaseAdminEnv()) {
+    try {
+      const admin = createAdminClient();
+      immediateResult = await runSeedPipeline(admin, canonicalSubCategory);
+    } catch (error) {
+      immediateResult = {
+        ok: false,
+        reason: error?.message || 'immediate_seed_failed',
+        sourceTier: null,
+      };
+    }
+  }
+
   let { analysis, error, includeReferences } = await loadSeriesRows(supabase, subCategoryVariants);
 
   if (error) {
@@ -359,15 +374,30 @@ export async function GET(request) {
   const lastAnalyzedMs = lastAnalyzedAt ? new Date(lastAnalyzedAt).getTime() : 0;
   const isStale = !lastAnalyzedMs || Date.now() - lastAnalyzedMs > STALE_MS;
   const insufficient = series.length < getMinimumSeriesPoints();
-  const shouldQueue = forceRefresh || isStale || insufficient;
-  const queueReason = forceRefresh ? 'manual_refresh' : isStale ? 'stale' : insufficient ? 'insufficient' : 'fresh';
+  const shouldQueue = isStale || insufficient;
+  const queueReason = isStale ? 'stale' : insufficient ? 'insufficient' : 'fresh';
 
   let queueResult = { queued: false, status: null };
-  if (shouldQueue) {
-    queueResult = await queueSeedRequest(canonicalSubCategory, queueReason, { force: forceRefresh });
+  if (forceRefresh) {
+    if (immediateResult?.ok) {
+      queueResult = { queued: false, status: 'done' };
+    } else {
+      const refreshReason = immediateResult?.reason || 'manual_refresh';
+      queueResult = await queueSeedRequest(canonicalSubCategory, refreshReason, { force: true });
+      if (!queueResult?.queued && !queueResult?.status) {
+        queueResult = { queued: false, status: 'failed' };
+      }
+    }
+  } else if (shouldQueue) {
+    queueResult = await queueSeedRequest(canonicalSubCategory, queueReason, { force: false });
   }
 
-  const sourceTier = pickSourceTier(series[series.length - 1]?.references);
+  const sourceTier = pickSourceTier(series[series.length - 1]?.references) || immediateResult?.sourceTier || null;
+  const seedReason = forceRefresh
+    ? immediateResult?.ok
+      ? 'immediate_done'
+      : immediateResult?.reason || 'manual_refresh'
+    : queueReason;
 
   return NextResponse.json(
     {
@@ -376,7 +406,7 @@ export async function GET(request) {
         stale: isStale,
         lastAnalyzedAt,
         seedQueued: Boolean(queueResult.queued),
-        seedReason: queueReason,
+        seedReason,
         seedStatus: queueResult.status,
         sourceTier,
       },
