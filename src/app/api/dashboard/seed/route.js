@@ -140,7 +140,9 @@ export async function POST(request) {
     const cronSecret = process.env.CRON_SECRET;
     const tokenAuthorized = cronSecret && token && token === cronSecret;
 
-    if (!process.env.GOOGLE_GEMINI_KEY) {
+    const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+    const hasGeminiKey = !!process.env.GOOGLE_GEMINI_KEY;
+    if (!hasOpenAIKey && !hasGeminiKey) {
       return NextResponse.json({ queued: false, reason: 'missing_key' });
     }
 
@@ -161,6 +163,14 @@ export async function POST(request) {
 
     const subCategory = parsed.data.subCategory;
     const admin = createAdminClient();
+
+    // Manual refresh should try to generate data immediately so users see results without waiting for cron.
+    if (!tokenAuthorized) {
+      const immediateResult = await seedImmediately(admin, subCategory);
+      if (immediateResult.ok) {
+        return NextResponse.json({ queued: true, immediate: true });
+      }
+    }
 
     const { data: existing, error: existingError } = await admin
       .from('seed_requests')
