@@ -14,8 +14,10 @@ const DEFAULT_META = { stale: false, lastAnalyzedAt: null, seedQueued: false };
 function toStatusText(reason) {
   if (reason === 'cooldown') return '잠시 후 다시';
   if (reason === 'processing') return '처리 중';
+  if (reason === 'queued_retry') return '요청됨';
   if (reason === 'queue_unavailable') return '큐 미설정';
   if (reason === 'queue_failed') return '요청 실패';
+  if (reason === 'no_items') return '자료 없음';
   return '요청 실패';
 }
 
@@ -116,7 +118,15 @@ export default function DashboardClient() {
       const payload = await res.json().catch(() => ({}));
 
       if (res.ok && payload?.queued) {
-        setRefreshStatus('요청됨');
+        setRefreshStatus(payload?.immediate ? '완료' : '요청됨');
+        if (payload?.immediate) {
+          const seriesRes = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(activeTab)}`);
+          if (seriesRes.ok) {
+            const seriesPayload = await seriesRes.json();
+            setSeries(seriesPayload.series || []);
+            setSeriesMeta(seriesPayload.meta || DEFAULT_META);
+          }
+        }
       } else {
         setRefreshStatus(toStatusText(payload?.reason));
       }
