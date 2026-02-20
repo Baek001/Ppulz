@@ -1,6 +1,7 @@
 ﻿import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
 import { ONBOARDING_STATES, normalizeArray } from '@/lib/onboarding/state';
 import { BIG_CATEGORIES, isValidBigCategory, isValidSubCategory } from '@/lib/constants/categories';
 
@@ -80,13 +81,40 @@ export async function getOrCreateOnboardingRow(supabase, userId) {
     .eq('user_id', userId)
     .maybeSingle();
 
-  if (retryError || !retried) {
+  if (retried) {
+    return normalizeOnboardingRow(retried);
+  }
+
+  // Edge/runtime auth-cookie mismatch can block user-scoped insert.
+  // Fall back to service-role upsert for this authenticated user id.
+  if (hasSupabaseAdminEnv()) {
+    const admin = createAdminClient();
+    const { error: adminInsertError } = await admin
+      .from('user_onboarding')
+      .upsert(buildDefaultOnboardingRow(userId), { onConflict: 'user_id', ignoreDuplicates: true });
+
+    const { data: adminRow, error: adminLoadError } = await admin
+      .from('user_onboarding')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (adminRow) {
+      return normalizeOnboardingRow(adminRow);
+    }
+
     throw new Error(
-      insertError?.message ?? retryError?.message ?? 'Failed to create onboarding row.',
+      adminInsertError?.message ??
+        adminLoadError?.message ??
+        insertError?.message ??
+        retryError?.message ??
+        'Failed to create onboarding row.',
     );
   }
 
-  return normalizeOnboardingRow(retried);
+  throw new Error(
+    insertError?.message ?? retryError?.message ?? 'Failed to create onboarding row.',
+  );
 }
 
 export function hasThreeBigCategories(onboarding) {

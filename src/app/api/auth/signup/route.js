@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
+import { ONBOARDING_STATES } from '@/lib/onboarding/state';
 
 const requestSchema = z.object({
   email: z.string().trim().email(),
@@ -40,7 +41,7 @@ export async function POST(request) {
     }
 
     const supabaseAdmin = createAdminClient();
-    const { error } = await supabaseAdmin.auth.admin.createUser({
+    const { data: createdUserData, error } = await supabaseAdmin.auth.admin.createUser({
       email: parsed.data.email,
       password: parsed.data.password,
       email_confirm: true,
@@ -52,6 +53,29 @@ export async function POST(request) {
       }
 
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const createdUserId = createdUserData?.user?.id;
+    if (createdUserId) {
+      const { error: onboardingError } = await supabaseAdmin
+        .from('user_onboarding')
+        .upsert(
+          {
+            user_id: createdUserId,
+            big_categories: [],
+            sub_categories: [],
+            example_checked: [],
+            onboarding_state: ONBOARDING_STATES.CATEGORIES_SELECTED,
+          },
+          { onConflict: 'user_id', ignoreDuplicates: true },
+        );
+
+      if (onboardingError) {
+        return NextResponse.json(
+          { error: `User created but onboarding row failed: ${onboardingError.message}` },
+          { status: 500 },
+        );
+      }
     }
 
     return NextResponse.json({ ok: true });
