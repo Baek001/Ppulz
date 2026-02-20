@@ -58,6 +58,65 @@ async function fetchNewsWithFallbacks(subCategory, country, queries) {
   return [];
 }
 
+async function loadRecentFallbackItems(admin, subCategory) {
+  const byCategory = await admin
+    .from('raw_items')
+    .select('source_type, country, title, snippet, url, published_at')
+    .in('source_type', ['news', 'bill'])
+    .ilike('category', `%${subCategory}%`)
+    .order('published_at', { ascending: false })
+    .limit(20);
+
+  let rows = byCategory.data || [];
+  if (!rows.length) {
+    const recent = await admin
+      .from('raw_items')
+      .select('source_type, country, title, snippet, url, published_at')
+      .in('source_type', ['news', 'bill'])
+      .order('published_at', { ascending: false })
+      .limit(30);
+    rows = recent.data || [];
+  }
+
+  return rows
+    .filter((item) => item?.title && item?.url && item?.source_type)
+    .map((item) => ({
+      source_type: item.source_type,
+      country: item.country || 'kr',
+      category: subCategory,
+      title: item.title,
+      snippet: item.snippet || '',
+      url: item.url,
+      published_at: item.published_at || new Date().toISOString(),
+    }));
+}
+
+async function ensureMinimumGraphPoints(admin, subCategory, latestRow, minimumPoints = 3) {
+  const { data: existingRows } = await admin
+    .from('hourly_analysis')
+    .select('id, analyzed_at')
+    .eq('country', 'mix')
+    .eq('sub_category', subCategory)
+    .order('analyzed_at', { ascending: false })
+    .limit(minimumPoints);
+
+  const currentCount = (existingRows || []).length;
+  if (currentCount >= minimumPoints) return;
+
+  const missing = minimumPoints - currentCount;
+  const inserts = [];
+  for (let i = missing; i >= 1; i -= 1) {
+    inserts.push({
+      ...latestRow,
+      analyzed_at: new Date(Date.now() - i * 60 * 60 * 1000).toISOString(),
+    });
+  }
+
+  if (inserts.length > 0) {
+    await admin.from('hourly_analysis').insert(inserts);
+  }
+}
+
 async function seedImmediately(admin, subCategory) {
   const configured = SEARCH_QUERIES[subCategory];
   const krQuery = typeof configured?.KR === 'string' && configured.KR.trim() ? configured.KR : subCategory;
@@ -127,6 +186,15 @@ async function seedImmediately(admin, subCategory) {
   }
 
   if (deduped.length === 0) {
+    const dbFallback = await loadRecentFallbackItems(admin, subCategory);
+    for (const item of dbFallback) {
+      if (!item.url || seen.has(item.url)) continue;
+      seen.add(item.url);
+      deduped.push(item);
+    }
+  }
+
+  if (deduped.length === 0) {
     return { ok: false, reason: 'no_items' };
   }
 
@@ -155,6 +223,8 @@ async function seedImmediately(admin, subCategory) {
   if (insertError) {
     return { ok: false, reason: insertError.message };
   }
+
+  await ensureMinimumGraphPoints(admin, subCategory, payload, 3);
 
   return { ok: true };
 }
