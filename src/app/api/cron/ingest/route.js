@@ -1,283 +1,285 @@
-﻿export const runtime = 'edge';
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { SEARCH_QUERIES } from '@/lib/constants/search_queries';
-import { fetchNews } from '@/lib/ingest/news';
+
+import { CATEGORY_TREE } from '@/lib/constants/categories';
+import { normalizeSubCategory } from '@/lib/dashboard/category-normalize';
+import { runSeedPipeline } from '@/lib/dashboard/seed-pipeline';
 
 const logs = [];
-export const dynamic = 'force-dynamic';
-const DEFAULT_FALLBACK_SUBS = ['利앷텒/二쇱떇', '?뚰겕/IT', '遺?숈궛'];
+
+const DEFAULT_FALLBACK_SUBS = ['주식', '반도체', '주거'];
+
+function parsePositiveInt(value, fallbackValue) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackValue;
+}
+
+const PROCESSING_STALE_MINUTES = parsePositiveInt(
+  process.env.DASHBOARD_SEED_PROCESSING_STALE_MINUTES,
+  10,
+);
+const PROCESSING_STALE_MS = PROCESSING_STALE_MINUTES * 60 * 1000;
+const MAX_NO_DATA_ATTEMPTS = parsePositiveInt(process.env.DASHBOARD_NO_DATA_MAX_ATTEMPTS, 3);
 
 function log(message) {
-    const timestamp = new Date().toISOString();
-    logs.push(`${timestamp}: ${message}`);
-    console.log(message);
+  const line = `${new Date().toISOString()}: ${message}`;
+  logs.push(line);
+  console.log(line);
 }
 
 function isCronAuthorized(request) {
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret) return false;
-    const headerSecret = request.headers.get('x-cron-secret');
-    if (headerSecret && headerSecret === cronSecret) {
-        return true;
-    }
-    const { searchParams } = new URL(request.url);
-    return searchParams.get('token') === cronSecret;
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+
+  const headerSecret = request.headers.get('x-cron-secret');
+  if (headerSecret && headerSecret === cronSecret) {
+    return true;
+  }
+
+  const { searchParams } = new URL(request.url);
+  return searchParams.get('token') === cronSecret;
 }
 
 function isMissingTableError(error, tableName) {
-    if (!error) return false;
-    if (error.code === '42P01') return true;
-    const message = String(error.message || '').toLowerCase();
-    return tableName ? message.includes(tableName.toLowerCase()) && message.includes('does not exist') : false;
+  if (!error) return false;
+  if (error.code === '42P01' || error.code === 'PGRST205') return true;
+  const message = String(error.message || '').toLowerCase();
+  return tableName ? message.includes(tableName.toLowerCase()) && message.includes('does not exist') : false;
 }
 
-function parsePositiveInt(value, fallbackValue) {
-    const parsed = Number.parseInt(value ?? '', 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackValue;
+function isConstraintError(error) {
+  if (!error) return false;
+  return error.code === '23514' || String(error.message || '').toLowerCase().includes('check constraint');
 }
 
-function normalizeSubCategory(item) {
-    if (typeof item === 'string') return item;
-    if (item && typeof item === 'object' && typeof item.sub_category === 'string') {
-        return item.sub_category;
+function isMissingColumnError(error, columnName) {
+  if (!error) return false;
+  if (error.code === '42703' || error.code === 'PGRST204') return true;
+  return String(error.message || '').toLowerCase().includes(columnName.toLowerCase());
+}
+
+function normalizeSubCategoryList(rawList) {
+  const set = new Set();
+  for (const item of rawList || []) {
+    if (typeof item === 'string') {
+      const normalized = normalizeSubCategory(item);
+      if (normalized) set.add(normalized);
+      continue;
     }
-    return null;
+    if (item && typeof item === 'object' && typeof item.sub_category === 'string') {
+      const normalized = normalizeSubCategory(item.sub_category);
+      if (normalized) set.add(normalized);
+    }
+  }
+  return Array.from(set);
+}
+
+function allKnownSubCategories() {
+  return Object.values(CATEGORY_TREE).flat().map((item) => normalizeSubCategory(item));
+}
+
+async function updateSeedStatus(supabase, subCategory, status, options = {}) {
+  const nowIso = new Date().toISOString();
+  const payload = {
+    status,
+    requested_at: nowIso,
+    last_attempt_at: nowIso,
+    last_error: options.lastError ?? null,
+  };
+
+  if (Number.isFinite(options.attempts)) {
+    payload.attempts = options.attempts;
+  }
+
+  let { error } = await supabase.from('seed_requests').update(payload).eq('sub_category', subCategory);
+
+  if (error && isMissingColumnError(error, 'last_attempt_at')) {
+    const { last_attempt_at, ...withoutLastAttempt } = payload;
+    ({ error } = await supabase
+      .from('seed_requests')
+      .update(withoutLastAttempt)
+      .eq('sub_category', subCategory));
+  }
+
+  if (error && status === 'done_no_data' && isConstraintError(error)) {
+    const fallbackPayload = {
+      ...payload,
+      status: 'done',
+      last_error: options.lastError ?? 'no_items',
+    };
+    ({ error } = await supabase.from('seed_requests').update(fallbackPayload).eq('sub_category', subCategory));
+  }
+
+  return error || null;
 }
 
 async function loadSeedRequests(supabase, limit) {
-    const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : null;
-    try {
-        let query = supabase
-            .from('seed_requests')
-            .select('sub_category, attempts, status, requested_at')
-            .in('status', ['pending', 'failed'])
-            .order('requested_at', { ascending: true });
+  let query = supabase
+    .from('seed_requests')
+    .select('sub_category, attempts, status, requested_at')
+    .in('status', ['pending', 'failed', 'processing'])
+    .order('requested_at', { ascending: true });
 
-        if (safeLimit) {
-            query = query.limit(safeLimit);
-        }
+  if (Number.isFinite(limit) && limit > 0) {
+    query = query.limit(limit);
+  }
 
-        const { data, error } = await query;
-        if (error) {
-            if (isMissingTableError(error, 'seed_requests')) {
-                log('seed_requests table missing. Skipping queue mode.');
-            } else {
-                log(`Failed to load seed_requests: ${error.message}`);
-            }
-            return [];
-        }
-
-        return data || [];
-    } catch (error) {
-        log(`Failed to load seed_requests: ${error.message}`);
-        return [];
+  const { data, error } = await query;
+  if (error) {
+    if (isMissingTableError(error, 'seed_requests')) {
+      log('seed_requests table missing. Queue mode disabled.');
+    } else {
+      log(`Failed to load seed_requests: ${error.message}`);
     }
+    return [];
+  }
+
+  const nowMs = Date.now();
+  return (data || []).filter((item) => {
+    if (item.status !== 'processing') return true;
+    if (!item.requested_at) return true;
+    const requestedMs = new Date(item.requested_at).getTime();
+    if (!Number.isFinite(requestedMs)) return true;
+    return nowMs - requestedMs >= PROCESSING_STALE_MS;
+  });
 }
 
-async function updateSeedStatus(supabase, subCategory, status, { attempts, lastError } = {}) {
-    try {
-        const payload = {
-            status,
-            last_error: lastError ?? null,
-        };
+async function loadSubCategoriesFromOnboarding(supabase, limit) {
+  const { data, error } = await supabase
+    .from('user_onboarding')
+    .select('sub_categories')
+    .not('sub_categories', 'is', null);
 
-        if (Number.isFinite(attempts)) {
-            payload.attempts = attempts;
-        }
+  if (error) {
+    throw new Error(error.message);
+  }
 
-        await supabase
-            .from('seed_requests')
-            .update(payload)
-            .eq('sub_category', subCategory);
-    } catch (error) {
-        log(`Failed to update seed_requests for ${subCategory}: ${error.message}`);
-    }
+  const normalized = normalizeSubCategoryList((data || []).flatMap((row) => row.sub_categories || []));
+  if (normalized.length === 0) {
+    return DEFAULT_FALLBACK_SUBS;
+  }
+
+  if (Number.isFinite(limit) && limit > 0) {
+    return normalized.slice(0, limit);
+  }
+
+  return normalized;
 }
 
 export async function GET(request) {
-    log('GET /api/cron/ingest started');
+  log('GET /api/cron/ingest started');
 
-    if (!isCronAuthorized(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isCronAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    return NextResponse.json({ error: 'Missing Supabase admin env' }, { status: 500 });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+  const limit = parsePositiveInt(
+    process.env.INGEST_MAX_SUBS_PER_RUN ?? process.env.INGEST_TARGET_LIMIT,
+    0,
+  );
+
+  const queueRequests = await loadSeedRequests(supabase, limit);
+  const queueMap = new Map(queueRequests.map((item) => [normalizeSubCategory(item.sub_category), item]));
+  let targetSubs = queueRequests.map((item) => normalizeSubCategory(item.sub_category)).filter(Boolean);
+  let queueMode = targetSubs.length > 0;
+
+  if (!queueMode) {
+    try {
+      targetSubs = await loadSubCategoriesFromOnboarding(supabase, limit);
+    } catch (error) {
+      log(`Failed to load onboarding categories: ${error.message}`);
+      targetSubs = allKnownSubCategories().slice(0, limit > 0 ? limit : 48);
+    }
+  }
+
+  const results = [];
+
+  for (const subCategory of targetSubs) {
+    const current = queueMap.get(subCategory);
+    const nextAttempts = Number(current?.attempts || 0) + 1;
+
+    if (queueMode) {
+      const processingError = await updateSeedStatus(supabase, subCategory, 'processing', {
+        attempts: nextAttempts,
+        lastError: null,
+      });
+      if (processingError) {
+        log(`Failed to mark processing for ${subCategory}: ${processingError.message}`);
+      }
     }
 
-    // Use Service Role Key to bypass RLS and fetch all user categories
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const pipelineResult = await runSeedPipeline(supabase, subCategory);
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-        return NextResponse.json({ error: 'Missing Supabase Service Key' }, { status: 500 });
+    if (pipelineResult.ok) {
+      results.push({
+        category: pipelineResult.canonicalSubCategory,
+        analyzed: true,
+        count: pipelineResult.itemCount,
+        score: pipelineResult.score,
+        sourceTier: pipelineResult.sourceTier,
+      });
+
+      if (queueMode) {
+        const doneError = await updateSeedStatus(supabase, subCategory, 'done', {
+          attempts: nextAttempts,
+          lastError: null,
+        });
+        if (doneError) {
+          log(`Failed to mark done for ${subCategory}: ${doneError.message}`);
+        }
+      }
+      continue;
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const results = [];
-
-    // 1. Load seed requests first (queue mode)
-    const maxTargets = parsePositiveInt(
-        process.env.INGEST_MAX_SUBS_PER_RUN ?? process.env.INGEST_TARGET_LIMIT,
-        0,
-    );
-    const seedRequests = await loadSeedRequests(supabase, maxTargets);
-    const seedMap = new Map(seedRequests.map((item) => [item.sub_category, item]));
-
-    let targetSubs = seedRequests.map((item) => item.sub_category).filter(Boolean);
-    let queueMode = targetSubs.length > 0;
-
-    // 2. Fallback: derive categories from onboarding
-    if (!queueMode) {
-        const { data: categories, error } = await supabase
-            .from('user_onboarding')
-            .select('sub_categories')
-            .not('sub_categories', 'is', null);
-
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-
-        // Flatten and unique
-        let allSubs = [...new Set(
-            categories
-                .flatMap((c) => c.sub_categories || [])
-                .map((item) => normalizeSubCategory(item))
-                .filter(Boolean)
-        )];
-
-        // Fallback for Cold Start
-        if (allSubs.length === 0) {
-            log('No user categories found. Using default fallback categories.');
-            allSubs = DEFAULT_FALLBACK_SUBS;
-        }
-
-        targetSubs =
-            Number.isFinite(maxTargets) && maxTargets > 0
-                ? allSubs.slice(0, maxTargets)
-                : allSubs;
-    }
-
-    // 3. Ingest & Analyze
-    // By default, analyze all selected subcategories so category edits immediately reflect in dashboard data.
-    const { analyzeNews } = require('@/lib/analysis/gemini');
-
-    for (const sub of targetSubs) {
-        if (queueMode) {
-            const current = seedMap.get(sub);
-            const attempts = Number(current?.attempts || 0) + 1;
-            await updateSeedStatus(supabase, sub, 'processing', { attempts });
-        }
-
-        // A. Fetch Mixed Data (KR News, US News, KR Bill, US Bill)
-        const queries = SEARCH_QUERIES[sub] || { KR: sub, US: sub }; // Fallback to basic string if obj missing
-
-        // Define requests
-        const requests = [
-            fetchNews(sub, 'kr', queries.KR), // KR News
-            fetchNews(sub, 'us', queries.US), // US News
-            fetchNews(sub + ' 踰뺤븞', 'kr', queries.KR ? `(${queries.KR}) AND (踰뺤븞 OR 洹쒖젣 OR ?뺤콉)` : `${sub} 踰뺤븞 洹쒖젣`), // KR Bill Proxy
-            fetchNews(sub + ' Bill', 'us', queries.US ? `(${queries.US}) AND (bill OR regulation OR legislation)` : `${sub} bill regulation`) // US Bill Proxy
-        ];
-
-        const [newsKR, newsUS, billsKR, billsUS] = await Promise.all(requests);
-
-        // Label items with source_type
-        const labelItems = (items, type) => items.map(i => ({ ...i, source_type: type }));
-
-        const allItems = [
-            ...labelItems(newsKR, 'news'),
-            ...labelItems(newsUS, 'news'),
-            ...labelItems(billsKR, 'bill'),
-            ...labelItems(billsUS, 'bill')
-        ];
-
-        if (allItems.length > 0) {
-            // Try to insert raw items (all types)
-            // Note: raw_items table needs duplicate handling
-            const { error: insertError } = await supabase
-                .from('raw_items')
-                .insert(allItems) // schema updated to accept these fields? verify raw_items schema
-                .select();
-
-            if (insertError) {
-                // duplicate key error is expected.
-            }
-
-            // B. Analyze
-            log(`Analyzing ${sub}: ${allItems.length} items (Mixed KR/US/Bills)...`);
-            const analysisResult = await analyzeNews(sub, allItems, 'mix');
-
-            if (analysisResult && !analysisResult.error) {
-                log(`Analysis result for ${sub}: ${analysisResult.score}`);
-
-                // Prepare insert payload
-                const payload = {
-                    country: 'mix', // Mixed analysis
-                    sub_category: sub,
-                    score: analysisResult.score,
-                    label: analysisResult.label,
-                    comment: analysisResult.comment,
-                    references: analysisResult.references
-                };
-
-                let { error: analyzeError } = await supabase
-                    .from('hourly_analysis')
-                    .insert(payload);
-
-                if (analyzeError) {
-                    console.error(`Analysis insert failed for ${sub}`, analyzeError);
-
-                    // Fallback: If 'references' column missing, retry without it
-                    if (analyzeError.message.includes('references') || analyzeError.code === '42703') { // 42703 is undefined_column
-                        log(`WARNING: 'references' column missing. Retrying without references...`);
-                        delete payload.references;
-                        const { error: retryError } = await supabase
-                            .from('hourly_analysis')
-                            .insert(payload);
-
-                        if (!retryError) {
-                            log(`Success: Inserted analysis without references.`);
-                            results.push({ category: sub, count: allItems.length, analyzed: true, score: analysisResult.score, warning: 'Schema outdated' });
-                            if (queueMode) {
-                                await updateSeedStatus(supabase, sub, 'done', { lastError: null });
-                            }
-                            analyzeError = null; // Clear error
-                        } else {
-                            log(`Retry failed: ${retryError.message}`);
-                            if (queueMode) {
-                                await updateSeedStatus(supabase, sub, 'failed', { lastError: retryError.message });
-                            }
-                        }
-                    } else {
-                        log(`Analysis insert failed: ${analyzeError.message}`);
-                        if (queueMode) {
-                            await updateSeedStatus(supabase, sub, 'failed', { lastError: analyzeError.message });
-                        }
-                    }
-                } else {
-                    results.push({ category: sub, count: allItems.length, analyzed: true, score: analysisResult.score });
-                    if (queueMode) {
-                        await updateSeedStatus(supabase, sub, 'done', { lastError: null });
-                    }
-                }
-            } else {
-                log(`Analysis failed for ${sub}: ${analysisResult?.error || 'Unknown error'}`);
-                if (queueMode) {
-                    await updateSeedStatus(supabase, sub, 'failed', { lastError: analysisResult?.error || 'Unknown error' });
-                }
-            }
-        } else {
-            log(`No items found for ${sub}`);
-            if (queueMode) {
-                await updateSeedStatus(supabase, sub, 'done', { lastError: 'no_items' });
-            }
-        }
-    }
-
-    return NextResponse.json({
-        success: true,
-        ingested: results,
-        logs: logs,
-        queueMode,
+    const reason = pipelineResult.reason || 'failed';
+    results.push({
+      category: pipelineResult.canonicalSubCategory || subCategory,
+      analyzed: false,
+      count: pipelineResult.itemCount || 0,
+      reason,
+      sourceTier: pipelineResult.sourceTier || null,
     });
+
+    if (!queueMode) continue;
+
+    if (reason === 'no_items') {
+      const status = nextAttempts >= MAX_NO_DATA_ATTEMPTS ? 'done_no_data' : 'failed';
+      const statusError = await updateSeedStatus(supabase, subCategory, status, {
+        attempts: nextAttempts,
+        lastError: reason,
+      });
+      if (statusError) {
+        log(`Failed to mark ${status} for ${subCategory}: ${statusError.message}`);
+      }
+      continue;
+    }
+
+    const failedError = await updateSeedStatus(supabase, subCategory, 'failed', {
+      attempts: nextAttempts,
+      lastError: reason,
+    });
+    if (failedError) {
+      log(`Failed to mark failed for ${subCategory}: ${failedError.message}`);
+    }
+  }
+
+  return NextResponse.json({
+    success: true,
+    queueMode,
+    targets: targetSubs.length,
+    ingested: results,
+    logs,
+  });
 }
 

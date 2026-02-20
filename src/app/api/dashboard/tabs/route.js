@@ -1,6 +1,7 @@
 ﻿export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { normalizeSubCategory } from '@/lib/dashboard/category-normalize';
 
 export async function GET(request) {
     const supabase = await createClient();
@@ -21,13 +22,16 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Onboarding data not found' }, { status: 404 });
     }
 
-    // Ensure tabs are strings
-    const tabs = (onboarding.sub_categories || []).map(item => {
-        if (typeof item === 'object' && item.sub_category) {
-            return item.sub_category;
+    const tabSet = new Set();
+    for (const item of onboarding.sub_categories || []) {
+        const value = typeof item === 'object' && item?.sub_category ? item.sub_category : item;
+        const normalized = normalizeSubCategory(value);
+        if (normalized) {
+            tabSet.add(normalized);
         }
-        return item;
-    });
+    }
+
+    const tabs = Array.from(tabSet);
 
     return NextResponse.json({ tabs });
 }

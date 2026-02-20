@@ -1,12 +1,12 @@
 export const runtime = 'edge';
+
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, hasSupabaseAdminEnv } from '@/lib/supabase/admin';
-import { SEARCH_QUERIES } from '@/lib/constants/search_queries';
-import { fetchNews } from '@/lib/ingest/news';
-import { analyzeNews } from '@/lib/analysis/gemini';
+import { normalizeSubCategory } from '@/lib/dashboard/category-normalize';
+import { runSeedPipeline } from '@/lib/dashboard/seed-pipeline';
 
 const requestSchema = z.object({
   subCategory: z.string().min(1),
@@ -19,6 +19,11 @@ function parsePositiveInt(value, fallbackValue) {
 
 const COOLDOWN_MINUTES = parsePositiveInt(process.env.DASHBOARD_SEED_COOLDOWN_MINUTES, 10);
 const COOLDOWN_MS = COOLDOWN_MINUTES * 60 * 1000;
+const PROCESSING_STALE_MINUTES = parsePositiveInt(
+  process.env.DASHBOARD_SEED_PROCESSING_STALE_MINUTES,
+  5,
+);
+const PROCESSING_STALE_MS = PROCESSING_STALE_MINUTES * 60 * 1000;
 
 function isMissingTableError(error, tableName) {
   if (!error) return false;
@@ -29,221 +34,41 @@ function isMissingTableError(error, tableName) {
 
 function isMissingColumnError(error, columnName) {
   if (!error) return false;
-  if (error.code === '42703') return true;
+  if (error.code === '42703' || error.code === 'PGRST204') return true;
   return String(error.message || '').toLowerCase().includes(columnName.toLowerCase());
 }
 
-function normalizeRawItems(items, subCategory, sourceType, fallbackCountry) {
-  return (items || [])
-    .filter((item) => item?.title && item?.url)
-    .map((item) => ({
-      source_type: sourceType,
-      country: item.country || fallbackCountry,
-      category: subCategory,
-      title: item.title,
-      snippet: item.snippet || '',
-      url: item.url,
-      published_at: item.published_at || new Date().toISOString(),
-    }));
-}
+async function upsertSeedStatus(admin, payload) {
+  let { error } = await admin.from('seed_requests').upsert(payload, { onConflict: 'sub_category' });
+  if (!error) return null;
 
-async function fetchNewsWithFallbacks(subCategory, country, queries) {
-  for (const query of queries) {
-    if (!query || typeof query !== 'string') continue;
-    const rows = await fetchNews(subCategory, country, query);
-    if (Array.isArray(rows) && rows.length > 0) {
-      return rows;
-    }
-  }
-  return [];
-}
-
-async function loadRecentFallbackItems(admin, subCategory) {
-  const byCategory = await admin
-    .from('raw_items')
-    .select('source_type, country, title, snippet, url, published_at')
-    .in('source_type', ['news', 'bill'])
-    .ilike('category', `%${subCategory}%`)
-    .order('published_at', { ascending: false })
-    .limit(20);
-
-  let rows = byCategory.data || [];
-  if (!rows.length) {
-    const recent = await admin
-      .from('raw_items')
-      .select('source_type, country, title, snippet, url, published_at')
-      .in('source_type', ['news', 'bill'])
-      .order('published_at', { ascending: false })
-      .limit(30);
-    rows = recent.data || [];
+  if (isMissingColumnError(error, 'last_attempt_at')) {
+    const { last_attempt_at, ...fallbackPayload } = payload;
+    ({ error } = await admin.from('seed_requests').upsert(fallbackPayload, { onConflict: 'sub_category' }));
   }
 
-  return rows
-    .filter((item) => item?.title && item?.url && item?.source_type)
-    .map((item) => ({
-      source_type: item.source_type,
-      country: item.country || 'kr',
-      category: subCategory,
-      title: item.title,
-      snippet: item.snippet || '',
-      url: item.url,
-      published_at: item.published_at || new Date().toISOString(),
-    }));
-}
-
-async function ensureMinimumGraphPoints(admin, subCategory, latestRow, minimumPoints = 3) {
-  const { data: existingRows } = await admin
-    .from('hourly_analysis')
-    .select('id, analyzed_at')
-    .eq('country', 'mix')
-    .eq('sub_category', subCategory)
-    .order('analyzed_at', { ascending: false })
-    .limit(minimumPoints);
-
-  const currentCount = (existingRows || []).length;
-  if (currentCount >= minimumPoints) return;
-
-  const missing = minimumPoints - currentCount;
-  const inserts = [];
-  for (let i = missing; i >= 1; i -= 1) {
-    inserts.push({
-      ...latestRow,
-      analyzed_at: new Date(Date.now() - i * 60 * 60 * 1000).toISOString(),
-    });
-  }
-
-  if (inserts.length > 0) {
-    await admin.from('hourly_analysis').insert(inserts);
-  }
-}
-
-async function seedImmediately(admin, subCategory) {
-  const configured = SEARCH_QUERIES[subCategory];
-  const krQuery = typeof configured?.KR === 'string' && configured.KR.trim() ? configured.KR : subCategory;
-  const usQuery = typeof configured?.US === 'string' && configured.US.trim() ? configured.US : subCategory;
-
-  const krNewsQueries = [
-    krQuery,
-    `${subCategory} 뉴스`,
-    `${subCategory} 시장`,
-    '한국 경제 뉴스',
-  ];
-  const usNewsQueries = [
-    usQuery,
-    `${subCategory} market news`,
-    `${subCategory} economy`,
-    'US economy news',
-  ];
-  const krBillQueries = [
-    `(${krQuery}) AND (법안 OR 규제 OR 정책 OR 입법)`,
-    `${subCategory} 법안`,
-    `${subCategory} 규제`,
-    '한국 규제 정책',
-  ];
-  const usBillQueries = [
-    `(${usQuery}) AND (bill OR regulation OR policy OR legislation)`,
-    `${subCategory} bill`,
-    `${subCategory} regulation`,
-    'US regulation policy',
-  ];
-
-  const [newsKR, newsUS, billsKR, billsUS] = await Promise.all([
-    fetchNewsWithFallbacks(subCategory, 'kr', krNewsQueries),
-    fetchNewsWithFallbacks(subCategory, 'us', usNewsQueries),
-    fetchNewsWithFallbacks(subCategory, 'kr', krBillQueries),
-    fetchNewsWithFallbacks(subCategory, 'us', usBillQueries),
-  ]);
-
-  const combined = [
-    ...normalizeRawItems(newsKR, subCategory, 'news', 'kr'),
-    ...normalizeRawItems(newsUS, subCategory, 'news', 'us'),
-    ...normalizeRawItems(billsKR, subCategory, 'bill', 'kr'),
-    ...normalizeRawItems(billsUS, subCategory, 'bill', 'us'),
-  ];
-
-  const deduped = [];
-  const seen = new Set();
-  for (const item of combined) {
-    if (!item.url || seen.has(item.url)) continue;
-    seen.add(item.url);
-    deduped.push(item);
-  }
-
-  if (deduped.length === 0) {
-    const [fallbackKR, fallbackUS] = await Promise.all([
-      fetchNewsWithFallbacks(subCategory, 'kr', ['한국 경제 뉴스', '한국 정책 뉴스']),
-      fetchNewsWithFallbacks(subCategory, 'us', ['US economy news', 'US policy news']),
-    ]);
-    const fallbackRows = [
-      ...normalizeRawItems(fallbackKR, subCategory, 'news', 'kr'),
-      ...normalizeRawItems(fallbackUS, subCategory, 'news', 'us'),
-    ];
-    for (const item of fallbackRows) {
-      if (!item.url || seen.has(item.url)) continue;
-      seen.add(item.url);
-      deduped.push(item);
-    }
-  }
-
-  if (deduped.length === 0) {
-    const dbFallback = await loadRecentFallbackItems(admin, subCategory);
-    for (const item of dbFallback) {
-      if (!item.url || seen.has(item.url)) continue;
-      seen.add(item.url);
-      deduped.push(item);
-    }
-  }
-
-  if (deduped.length === 0) {
-    return { ok: false, reason: 'no_items' };
-  }
-
-  await admin.from('raw_items').upsert(deduped, { onConflict: 'url', ignoreDuplicates: true });
-
-  const analysisResult = await analyzeNews(subCategory, deduped, 'mix');
-  if (!analysisResult || analysisResult.error) {
-    return { ok: false, reason: analysisResult?.error || 'analysis_failed' };
-  }
-
-  const payload = {
-    country: 'mix',
-    sub_category: subCategory,
-    score: analysisResult.score,
-    label: analysisResult.label,
-    comment: analysisResult.comment,
-    references: analysisResult.references,
-  };
-
-  let { error: insertError } = await admin.from('hourly_analysis').insert(payload);
-  if (isMissingColumnError(insertError, 'references')) {
-    const { references, ...rest } = payload;
-    ({ error: insertError } = await admin.from('hourly_analysis').insert(rest));
-  }
-
-  if (insertError) {
-    return { ok: false, reason: insertError.message };
-  }
-
-  await ensureMinimumGraphPoints(admin, subCategory, payload, 3);
-
-  return { ok: true };
+  return error || null;
 }
 
 async function updateSeedStatus(admin, subCategory, status, attempts, lastError = null) {
   const payload = {
     sub_category: subCategory,
     requested_at: new Date().toISOString(),
+    last_attempt_at: new Date().toISOString(),
     status,
     attempts,
     last_error: lastError,
   };
-  return admin.from('seed_requests').upsert(payload, { onConflict: 'sub_category' });
+  return upsertSeedStatus(admin, payload);
 }
 
 export async function POST(request) {
   try {
     if (!hasSupabaseAdminEnv()) {
-      return NextResponse.json({ error: 'Admin env not configured.' }, { status: 503 });
+      return NextResponse.json(
+        { error: 'Admin env not configured.', reason: 'missing_admin_env' },
+        { status: 503 },
+      );
     }
 
     const supabase = await createClient();
@@ -261,60 +86,111 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const subCategory = parsed.data.subCategory;
+    const requestedSubCategory = parsed.data.subCategory;
+    const canonicalSubCategory = normalizeSubCategory(requestedSubCategory);
+    if (!canonicalSubCategory) {
+      return NextResponse.json({ error: 'Invalid subCategory' }, { status: 400 });
+    }
+
     const admin = createAdminClient();
 
     const { data: existing, error: existingError } = await admin
       .from('seed_requests')
       .select('status, requested_at, attempts')
-      .eq('sub_category', subCategory)
+      .eq('sub_category', canonicalSubCategory)
       .maybeSingle();
 
     const queueUnavailable = isMissingTableError(existingError, 'seed_requests');
     if (existingError && !queueUnavailable) {
-      return NextResponse.json({ queued: false, reason: 'queue_failed', error: existingError.message });
-    }
-
-    if (!queueUnavailable && existing?.status === 'processing') {
-      return NextResponse.json({ queued: false, reason: 'processing' });
+      return NextResponse.json({
+        queued: false,
+        reason: 'queue_failed',
+        error: existingError.message,
+      });
     }
 
     const nowMs = Date.now();
     const lastRequestedMs = existing?.requested_at ? new Date(existing.requested_at).getTime() : 0;
+    const processingFresh =
+      existing?.status === 'processing' &&
+      Number.isFinite(lastRequestedMs) &&
+      nowMs - lastRequestedMs < PROCESSING_STALE_MS;
+
+    if (!queueUnavailable && processingFresh) {
+      return NextResponse.json({
+        queued: false,
+        reason: 'processing',
+        status: 'processing',
+        subCategory: canonicalSubCategory,
+      });
+    }
+
     if (!queueUnavailable && Number.isFinite(lastRequestedMs) && nowMs - lastRequestedMs < COOLDOWN_MS) {
-      return NextResponse.json({ queued: false, reason: 'cooldown' });
+      return NextResponse.json({
+        queued: false,
+        reason: 'cooldown',
+        status: existing?.status || null,
+        subCategory: canonicalSubCategory,
+      });
     }
 
     const nextAttempts = Number(existing?.attempts || 0) + 1;
 
     if (!queueUnavailable) {
-      const { error: processingError } = await updateSeedStatus(
+      const processingError = await updateSeedStatus(
         admin,
-        subCategory,
+        canonicalSubCategory,
         'processing',
         nextAttempts,
         null,
       );
       if (processingError) {
-        return NextResponse.json({ queued: false, reason: 'queue_failed', error: processingError.message });
+        return NextResponse.json({
+          queued: false,
+          reason: 'queue_failed',
+          error: processingError.message,
+        });
       }
     }
 
-    const immediateResult = await seedImmediately(admin, subCategory);
+    const immediateResult = await runSeedPipeline(admin, canonicalSubCategory);
     if (immediateResult.ok) {
       if (!queueUnavailable) {
-        await updateSeedStatus(admin, subCategory, 'done', nextAttempts, null);
+        await updateSeedStatus(admin, canonicalSubCategory, 'done', nextAttempts, null);
       }
-      return NextResponse.json({ queued: true, immediate: true });
+      return NextResponse.json({
+        queued: true,
+        immediate: true,
+        status: 'done',
+        sourceTier: immediateResult.sourceTier || 'category',
+        subCategory: canonicalSubCategory,
+      });
     }
 
-    // Immediate attempt failed, keep it queued for cron retry.
     if (!queueUnavailable) {
-      await updateSeedStatus(admin, subCategory, 'pending', nextAttempts, immediateResult.reason || 'failed');
-      return NextResponse.json({ queued: true, immediate: false, reason: 'queued_retry' });
+      const fallbackStatus = 'pending';
+      await updateSeedStatus(
+        admin,
+        canonicalSubCategory,
+        fallbackStatus,
+        nextAttempts,
+        immediateResult.reason || 'failed',
+      );
+      return NextResponse.json({
+        queued: true,
+        immediate: false,
+        reason: 'queued_retry',
+        status: fallbackStatus,
+        subCategory: canonicalSubCategory,
+      });
     }
 
-    return NextResponse.json({ queued: false, reason: immediateResult.reason || 'failed' });
+    return NextResponse.json({
+      queued: false,
+      reason: immediateResult.reason || 'failed',
+      status: immediateResult.reason === 'no_items' ? 'done_no_data' : 'failed',
+      subCategory: canonicalSubCategory,
+    });
   } catch (error) {
     return NextResponse.json({ error: error?.message ?? 'Failed to queue seed.' }, { status: 500 });
   }

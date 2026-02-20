@@ -3,19 +3,15 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 let adminClient;
 
 export function hasSupabaseAdminEnv() {
-  return true;
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 export function createAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zphqsvbwuyeiwuwbznrl.supabase.co';
-  // Split key to bypass GitHub secret scanning (Temporary fix)
-  const p1 = 'sb_secret_M1851JNQU';
-  const p2 = '6OGmMP7paqbWg_sI43_Yzx';
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || (p1 + p2);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceRoleKey) {
-    // throw new Error(...);
-    console.error('Missing Supabase admin environment variables.');
+    throw new Error('Missing Supabase admin environment variables.');
   }
 
   if (!adminClient) {

@@ -9,16 +9,35 @@ import PredictionMarketSection from './PredictionMarketSection';
 import ReferenceSection from './ReferenceSection';
 import styles from './Dashboard.module.css';
 
-const DEFAULT_META = { stale: false, lastAnalyzedAt: null, seedQueued: false };
+const DEFAULT_META = {
+  stale: false,
+  lastAnalyzedAt: null,
+  seedQueued: false,
+  seedReason: 'fresh',
+  seedStatus: null,
+  sourceTier: null,
+};
 
 function toStatusText(reason) {
   if (reason === 'cooldown') return '잠시 후 다시';
   if (reason === 'processing') return '처리 중';
   if (reason === 'queued_retry') return '요청됨';
+  if (reason === 'pending') return '요청됨';
+  if (reason === 'manual_refresh') return '요청됨';
+  if (reason === 'stale') return '요청됨';
+  if (reason === 'insufficient') return '요청됨';
   if (reason === 'queue_unavailable') return '큐 미설정';
   if (reason === 'queue_failed') return '요청 실패';
+  if (reason === 'done_no_data') return '데이터 부족';
   if (reason === 'no_items') return '자료 없음';
   return '요청 실패';
+}
+
+function getStatusFromMeta(meta) {
+  if (!meta) return '';
+  if (meta.seedQueued) return '요청됨';
+  if (meta.seedStatus) return toStatusText(meta.seedStatus);
+  return '';
 }
 
 export default function DashboardClient() {
@@ -31,6 +50,15 @@ export default function DashboardClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState('');
   const refreshTimeoutRef = useRef(null);
+
+  async function fetchSeriesForTab(tab, signal) {
+    const res = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(tab)}`, { signal });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload.error || 'Failed to fetch series');
+    }
+    return res.json();
+  }
 
   useEffect(() => {
     async function fetchTabs() {
@@ -58,51 +86,51 @@ export default function DashboardClient() {
 
   useEffect(() => {
     if (!activeTab) return;
-
     const controller = new AbortController();
 
-    async function fetchSeries() {
+    async function run() {
       try {
         setSeriesError('');
-        const res = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(activeTab)}`, {
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const payload = await res.json().catch(() => ({}));
-          setSeries([]);
-          setSeriesMeta(DEFAULT_META);
-          setSeriesError(payload.error || 'Failed to fetch series');
-          return;
-        }
-
-        const data = await res.json();
+        const data = await fetchSeriesForTab(activeTab, controller.signal);
         setSeries(data.series || []);
         setSeriesMeta(data.meta || DEFAULT_META);
-        if (data?.meta?.seedQueued) {
-          setRefreshStatus('요청됨');
-        }
+        setRefreshStatus(getStatusFromMeta(data.meta));
       } catch (error) {
         if (error?.name === 'AbortError') return;
-        console.error('Failed to fetch series', error);
         setSeries([]);
         setSeriesMeta(DEFAULT_META);
-        setSeriesError('Failed to fetch series');
+        setSeriesError(error.message || 'Failed to fetch series');
       }
     }
 
-    fetchSeries();
-
+    run();
     return () => controller.abort();
   }, [activeTab]);
 
   useEffect(() => {
     return () => {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
-      }
+      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
     };
   }, []);
+
+  async function refreshBySeriesFallback() {
+    try {
+      const res = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(activeTab)}&refresh=1`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        setRefreshStatus(payload.error || '요청 실패');
+        return;
+      }
+      const payload = await res.json();
+      setSeries(payload.series || []);
+      setSeriesMeta(payload.meta || DEFAULT_META);
+      const status = getStatusFromMeta(payload.meta);
+      setRefreshStatus(status || '완료');
+    } catch (error) {
+      console.error('Fallback refresh failed', error);
+      setRefreshStatus('요청 실패');
+    }
+  }
 
   async function handleRefresh() {
     if (!activeTab || refreshing) return;
@@ -115,35 +143,36 @@ export default function DashboardClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subCategory: activeTab }),
       });
-      const payload = await res.json().catch(() => ({}));
 
+      // If seed endpoint is unavailable on deployed env, fallback to series refresh queueing.
+      if (res.status === 404) {
+        await refreshBySeriesFallback();
+        return;
+      }
+
+      const payload = await res.json().catch(() => ({}));
       if (res.ok && payload?.queued) {
-        setRefreshStatus(payload?.immediate ? '완료' : '요청됨');
+        const queuedStatus = payload?.immediate ? '완료' : toStatusText(payload?.status || payload?.reason);
+        setRefreshStatus(queuedStatus);
         if (payload?.immediate) {
-          const seriesRes = await fetch(`/api/dashboard/series?sub=${encodeURIComponent(activeTab)}`);
-          if (seriesRes.ok) {
-            const seriesPayload = await seriesRes.json();
-            setSeries(seriesPayload.series || []);
-            setSeriesMeta(seriesPayload.meta || DEFAULT_META);
-          }
+          const data = await fetchSeriesForTab(activeTab);
+          setSeries(data.series || []);
+          setSeriesMeta(data.meta || DEFAULT_META);
+          const status = getStatusFromMeta(data.meta);
+          if (status) setRefreshStatus(status);
         }
       } else {
-        setRefreshStatus(toStatusText(payload?.reason));
+        setRefreshStatus(toStatusText(payload?.status || payload?.reason));
       }
     } catch (error) {
-      console.error('Failed to queue refresh', error);
+      console.error('Failed to refresh', error);
       setRefreshStatus('요청 실패');
     } finally {
       setRefreshing(false);
     }
 
-    if (refreshTimeoutRef.current) {
-      clearTimeout(refreshTimeoutRef.current);
-    }
-
-    refreshTimeoutRef.current = setTimeout(() => {
-      setRefreshStatus('');
-    }, 30000);
+    if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
+    refreshTimeoutRef.current = setTimeout(() => setRefreshStatus(''), 30000);
   }
 
   const currentData = series.length > 0 ? series[series.length - 1] : null;
@@ -168,7 +197,7 @@ export default function DashboardClient() {
       />
 
       <ScoreGraph data={series} />
-      <ScoreCard current={currentData} />
+      <ScoreCard current={currentData} sourceTier={seriesMeta?.sourceTier} />
       <PredictionMarketSection activeTab={activeTab} />
       <ReferenceSection references={currentData?.references} />
 

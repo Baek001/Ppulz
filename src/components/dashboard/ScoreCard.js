@@ -8,7 +8,14 @@ function getScoreColorClass(score) {
     return styles.scoreRed; // Negative
 }
 
-export default function ScoreCard({ current }) {
+function sourceTierText(sourceTier) {
+    if (sourceTier === 'related') return '보강 데이터(유사 카테고리)';
+    if (sourceTier === 'global') return '보강 데이터(공통 이슈)';
+    if (sourceTier === 'db') return '보강 데이터(최근 아카이브)';
+    return '';
+}
+
+export default function ScoreCard({ current, sourceTier }) {
     if (!current) {
         return (
             <div className={styles.scoreCard}>
@@ -31,6 +38,11 @@ export default function ScoreCard({ current }) {
             <p className={styles.scoreComment}>
                 {comment || '아직 AI 분석 코멘트가 없습니다.'}
             </p>
+            {sourceTier && sourceTier !== 'category' ? (
+                <p style={{ marginTop: '8px', fontSize: '12px', color: '#8b95a1' }}>
+                    {sourceTierText(sourceTier)}
+                </p>
+            ) : null}
         </div>
     );
 }
